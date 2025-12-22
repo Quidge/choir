@@ -59,7 +59,10 @@ func runConfigShow(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	configPath, _ := config.GlobalConfigPath()
+	configPath, err := config.GlobalConfigPath()
+	if err != nil {
+		return fmt.Errorf("failed to determine config path: %w", err)
+	}
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		fmt.Printf("# No config file found at %s\n", configPath)
 		fmt.Println("# Showing default configuration:")
@@ -88,7 +91,7 @@ func runConfigEdit(_ *cobra.Command, _ []string) error {
 		if err := config.EnsureGlobalConfigDir(); err != nil {
 			return fmt.Errorf("failed to create config directory: %w", err)
 		}
-		if err := os.WriteFile(configPath, []byte(config.GlobalConfigTemplate), 0644); err != nil {
+		if err := os.WriteFile(configPath, []byte(config.GlobalConfigTemplate), 0600); err != nil {
 			return fmt.Errorf("failed to create config file: %w", err)
 		}
 	}
@@ -113,7 +116,8 @@ func runConfigSet(_ *cobra.Command, args []string) error {
 	key := args[0]
 	value := args[1]
 
-	// For now, return not implemented - proper implementation would require
-	// reflection or a more sophisticated approach to set nested YAML values
+	// TODO(#1): Implement config set with dot notation for nested YAML values.
+	// This requires reflection or a library like "github.com/tidwall/sjson" adapted for YAML.
+	// See spec Section 5.2.10 for requirements.
 	return fmt.Errorf("config set not implemented: %s=%s\nPlease use 'choir config edit' instead", key, value)
 }

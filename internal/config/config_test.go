@@ -333,3 +333,44 @@ func TestDefaultProjectConfig(t *testing.T) {
 		t.Errorf("expected branch_prefix 'agent/', got %q", cfg.BranchPrefix)
 	}
 }
+
+func TestWriteProjectConfig_Permissions(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, ".choir.yaml")
+
+	cfg := DefaultProjectConfig()
+	if err := WriteProjectConfig(configPath, cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	info, err := os.Stat(configPath)
+	if err != nil {
+		t.Fatalf("failed to stat config file: %v", err)
+	}
+
+	// Project configs are 0644 (world-readable) since they're version controlled
+	expectedMode := os.FileMode(0644)
+	actualMode := info.Mode().Perm()
+	if actualMode != expectedMode {
+		t.Errorf("expected permissions %o, got %o", expectedMode, actualMode)
+	}
+}
+
+func TestGlobalConfigPath(t *testing.T) {
+	path, err := GlobalConfigPath()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if path == "" {
+		t.Error("expected non-empty path")
+	}
+
+	// Should end with choir/config.yaml
+	if filepath.Base(path) != "config.yaml" {
+		t.Errorf("expected path to end with config.yaml, got %s", path)
+	}
+	if filepath.Base(filepath.Dir(path)) != "choir" {
+		t.Errorf("expected path to be in choir directory, got %s", path)
+	}
+}
