@@ -65,9 +65,15 @@ func Open(path string) (*DB, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// For in-memory databases with shared cache, limit connections to avoid issues
+	// Configure connection pool based on database type
 	if path == ":memory:" {
+		// For in-memory databases with shared cache, use single connection to avoid issues
 		sqlDB.SetMaxOpenConns(1)
+	} else {
+		// For file-based databases, configure pool for concurrent access
+		sqlDB.SetMaxOpenConns(10)
+		sqlDB.SetMaxIdleConns(5)
+		sqlDB.SetConnMaxLifetime(0) // Connections don't expire
 	}
 
 	// Verify connection

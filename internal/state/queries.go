@@ -35,6 +35,8 @@ func (db *DB) ListAgents(opts ListOptions) ([]*Agent, error) {
 	}
 
 	if len(opts.Statuses) > 0 {
+		// Build parameterized IN clause. This is safe from SQL injection because
+		// we generate one "?" placeholder per status and pass values via args.
 		placeholders := make([]string, len(opts.Statuses))
 		for i, s := range opts.Statuses {
 			placeholders[i] = "?"
@@ -89,6 +91,8 @@ func (db *DB) CountAgents(opts ListOptions) (int, error) {
 	}
 
 	if len(opts.Statuses) > 0 {
+		// Build parameterized IN clause. This is safe from SQL injection because
+		// we generate one "?" placeholder per status and pass values via args.
 		placeholders := make([]string, len(opts.Statuses))
 		for i, s := range opts.Statuses {
 			placeholders[i] = "?"

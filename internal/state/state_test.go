@@ -517,20 +517,21 @@ func TestConcurrentReads(t *testing.T) {
 		t.Fatalf("CreateAgent() failed: %v", err)
 	}
 
-	// Perform concurrent reads
-	done := make(chan bool, 10)
-	for i := 0; i < 10; i++ {
+	// Perform concurrent reads, collecting errors via channel
+	// (t.Errorf is not safe to call from goroutines)
+	const numGoroutines = 10
+	errs := make(chan error, numGoroutines)
+	for i := 0; i < numGoroutines; i++ {
 		go func() {
 			_, err := db.GetAgent("concurrent-test")
-			if err != nil {
-				t.Errorf("concurrent GetAgent() failed: %v", err)
-			}
-			done <- true
+			errs <- err
 		}()
 	}
 
-	// Wait for all goroutines
-	for i := 0; i < 10; i++ {
-		<-done
+	// Collect results and check for errors
+	for i := 0; i < numGoroutines; i++ {
+		if err := <-errs; err != nil {
+			t.Errorf("concurrent GetAgent() failed: %v", err)
+		}
 	}
 }
