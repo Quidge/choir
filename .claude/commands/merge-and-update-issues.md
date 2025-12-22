@@ -14,3 +14,27 @@ Additionally, it's possible that the related GH issue is a child issue related t
 ## In case of a deviation
 
 If the PR deviated from the written design in the directly related GH issue or any parent + sibling issues, in ways that would affect those issues, those issue bodies need to be updated to note the new changes.
+
+## Local Branch Cleanup
+
+After updating issues, clean up the local branch if the PR was merged:
+
+1. **Get the PR's branch name and merge status:**
+   ```bash
+   gh pr view <pr-number> --json headRefName,state --jq '{branch: .headRefName, state: .state}'
+   ```
+
+2. **If PR was merged, switch to main and pull:**
+   ```bash
+   git checkout main
+   git pull origin main
+   ```
+
+3. **Delete the local branch:**
+   ```bash
+   git branch -d <pr-branch>
+   ```
+   - Use `-d` (safe delete) which only deletes if fully merged
+   - If the branch doesn't exist locally, skip this step
+
+4. **Confirm to user:** "Switched to main, pulled latest, and deleted local branch `<pr-branch>`"
