@@ -178,4 +178,19 @@ func TestNewCreateConfig(t *testing.T) {
 			t.Errorf("expected nil Environment, got %v", cfg.Environment)
 		}
 	})
+
+	t.Run("empty environment map", func(t *testing.T) {
+		emptyEnvMerged := baseMerged
+		emptyEnvMerged.Env = map[string]string{}
+		cfg, err := NewCreateConfig(emptyEnvMerged, baseRepo, "task-123")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cfg.Environment == nil {
+			t.Error("expected non-nil Environment for empty map")
+		}
+		if len(cfg.Environment) != 0 {
+			t.Errorf("expected empty Environment, got %v", cfg.Environment)
+		}
+	})
 }
