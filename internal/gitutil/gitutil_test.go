@@ -140,6 +140,28 @@ func TestCurrentBranch(t *testing.T) {
 		}
 	})
 
+	t.Run("detached HEAD", func(t *testing.T) {
+		// Get the current commit hash
+		cmd := exec.Command("git", "rev-parse", "HEAD")
+		cmd.Dir = repoDir
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("git rev-parse failed: %v", err)
+		}
+
+		// Checkout the commit directly (detached HEAD)
+		cmd = exec.Command("git", "checkout", string(out[:40]))
+		cmd.Dir = repoDir
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("git checkout commit failed: %v", err)
+		}
+
+		_, err = CurrentBranch(repoDir)
+		if !errors.Is(err, ErrDetachedHead) {
+			t.Errorf("CurrentBranch() error = %v, want ErrDetachedHead", err)
+		}
+	})
+
 	t.Run("not a git repo", func(t *testing.T) {
 		notGitDir := t.TempDir()
 		_, err := CurrentBranch(notGitDir)

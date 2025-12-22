@@ -78,8 +78,12 @@ func CurrentBranch(dir string) (string, error) {
 	if err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			// Check if it's a detached HEAD
-			if IsDetachedHead(dir) {
+			// Check stderr to determine the cause of failure.
+			// We inspect the error message from this single command rather than
+			// making a second git call (e.g., to IsDetachedHead), which avoids
+			// a potential race condition if the repo state changes between calls.
+			stderr := string(exitErr.Stderr)
+			if strings.Contains(stderr, "not a symbolic ref") {
 				return "", ErrDetachedHead
 			}
 			return "", ErrNotGitRepo
