@@ -21,6 +21,11 @@ import (
 // *how* to execute stays encapsulated. The caller just calls runner.Run(config).
 type SetupRunner interface {
 	// Run executes all setup steps for the workspace.
+	//
+	// Implementations should respect context cancellation:
+	//   - Check ctx.Done() between setup steps
+	//   - Return ctx.Err() promptly when cancelled
+	//   - Clean up any partial state before returning on cancellation
 	Run(ctx context.Context, cfg *SetupConfig) error
 }
 
