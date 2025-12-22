@@ -2,6 +2,7 @@ package worktree
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,80 +14,60 @@ import (
 )
 
 // setupTestRepo creates a temporary git repository for testing.
-// Returns the repo path and a cleanup function.
-func setupTestRepo(t *testing.T) (string, func()) {
+// Uses t.TempDir() for automatic cleanup.
+// Returns the repo path.
+func setupTestRepo(t *testing.T) string {
 	t.Helper()
 
-	// Create temp directory
-	tmpDir, err := os.MkdirTemp("", "choir-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	// Use t.TempDir() which handles cleanup automatically
+	tmpDir := t.TempDir()
 
 	repoDir := filepath.Join(tmpDir, "repo")
 	if err := os.Mkdir(repoDir, 0755); err != nil {
-		os.RemoveAll(tmpDir)
 		t.Fatalf("failed to create repo dir: %v", err)
 	}
 
-	// cleanGitEnv returns a clean environment without git-specific variables
-	// that might interfere with test git operations (e.g., during pre-commit hooks)
-	cleanGitEnv := func() []string {
-		var env []string
-		for _, e := range os.Environ() {
-			// Skip git environment variables that might interfere
-			if !strings.HasPrefix(e, "GIT_") {
-				env = append(env, e)
-			}
-		}
-		return env
-	}
+	// Use cleanGitEnv from worktree.go to avoid git hook interference
+	env := cleanGitEnv()
 
 	// Initialize git repo
 	cmd := exec.Command("git", "init")
 	cmd.Dir = repoDir
-	cmd.Env = cleanGitEnv()
+	cmd.Env = env
 	if out, err := cmd.CombinedOutput(); err != nil {
-		os.RemoveAll(tmpDir)
 		t.Fatalf("failed to init repo: %v\n%s", err, out)
 	}
 
 	// Configure git user for commits
 	cmd = exec.Command("git", "config", "user.email", "test@example.com")
 	cmd.Dir = repoDir
-	cmd.Env = cleanGitEnv()
+	cmd.Env = env
 	cmd.Run()
 
 	cmd = exec.Command("git", "config", "user.name", "Test User")
 	cmd.Dir = repoDir
-	cmd.Env = cleanGitEnv()
+	cmd.Env = env
 	cmd.Run()
 
 	// Create initial commit
 	testFile := filepath.Join(repoDir, "README.md")
 	if err := os.WriteFile(testFile, []byte("# Test\n"), 0644); err != nil {
-		os.RemoveAll(tmpDir)
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
 	cmd = exec.Command("git", "add", ".")
 	cmd.Dir = repoDir
-	cmd.Env = cleanGitEnv()
+	cmd.Env = env
 	cmd.Run()
 
 	cmd = exec.Command("git", "commit", "-m", "Initial commit")
 	cmd.Dir = repoDir
-	cmd.Env = cleanGitEnv()
+	cmd.Env = env
 	if out, err := cmd.CombinedOutput(); err != nil {
-		os.RemoveAll(tmpDir)
 		t.Fatalf("failed to commit: %v\n%s", err, out)
 	}
 
-	cleanup := func() {
-		os.RemoveAll(tmpDir)
-	}
-
-	return repoDir, cleanup
+	return repoDir
 }
 
 func TestNew(t *testing.T) {
@@ -106,8 +87,7 @@ func TestBackendType(t *testing.T) {
 }
 
 func TestCreate(t *testing.T) {
-	repoDir, cleanup := setupTestRepo(t)
-	defer cleanup()
+	repoDir := setupTestRepo(t)
 
 	b, _ := New(backend.BackendConfig{})
 	ctx := context.Background()
@@ -159,8 +139,8 @@ func TestCreateMissingTaskID(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for missing task ID")
 	}
-	if !strings.Contains(err.Error(), "task ID") {
-		t.Errorf("expected error about task ID, got: %v", err)
+	if !errors.Is(err, ErrMissingTaskID) {
+		t.Errorf("expected ErrMissingTaskID, got: %v", err)
 	}
 }
 
@@ -176,14 +156,13 @@ func TestCreateMissingRepoPath(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for missing repository path")
 	}
-	if !strings.Contains(err.Error(), "repository path") {
-		t.Errorf("expected error about repository path, got: %v", err)
+	if !errors.Is(err, ErrMissingRepoPath) {
+		t.Errorf("expected ErrMissingRepoPath, got: %v", err)
 	}
 }
 
 func TestCreateDuplicate(t *testing.T) {
-	repoDir, cleanup := setupTestRepo(t)
-	defer cleanup()
+	repoDir := setupTestRepo(t)
 
 	b, _ := New(backend.BackendConfig{})
 	ctx := context.Background()
@@ -207,14 +186,13 @@ func TestCreateDuplicate(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for duplicate worktree")
 	}
-	if !strings.Contains(err.Error(), "already exists") {
-		t.Errorf("expected error about already existing, got: %v", err)
+	if !errors.Is(err, ErrWorktreeExists) {
+		t.Errorf("expected ErrWorktreeExists, got: %v", err)
 	}
 }
 
 func TestStatus(t *testing.T) {
-	repoDir, cleanup := setupTestRepo(t)
-	defer cleanup()
+	repoDir := setupTestRepo(t)
 
 	b, _ := New(backend.BackendConfig{})
 	ctx := context.Background()
@@ -275,8 +253,7 @@ func TestStatusNotChoirManaged(t *testing.T) {
 }
 
 func TestStartStop(t *testing.T) {
-	repoDir, cleanup := setupTestRepo(t)
-	defer cleanup()
+	repoDir := setupTestRepo(t)
 
 	b, _ := New(backend.BackendConfig{})
 	ctx := context.Background()
@@ -327,8 +304,7 @@ func TestStopNotFound(t *testing.T) {
 }
 
 func TestExec(t *testing.T) {
-	repoDir, cleanup := setupTestRepo(t)
-	defer cleanup()
+	repoDir := setupTestRepo(t)
 
 	b, _ := New(backend.BackendConfig{})
 	ctx := context.Background()
@@ -361,8 +337,7 @@ func TestExec(t *testing.T) {
 }
 
 func TestExecWithEnv(t *testing.T) {
-	repoDir, cleanup := setupTestRepo(t)
-	defer cleanup()
+	repoDir := setupTestRepo(t)
 
 	b, _ := New(backend.BackendConfig{})
 	ctx := context.Background()
@@ -416,8 +391,7 @@ func TestExecNotFound(t *testing.T) {
 }
 
 func TestExecFailingCommand(t *testing.T) {
-	repoDir, cleanup := setupTestRepo(t)
-	defer cleanup()
+	repoDir := setupTestRepo(t)
 
 	b, _ := New(backend.BackendConfig{})
 	ctx := context.Background()
@@ -446,8 +420,7 @@ func TestExecFailingCommand(t *testing.T) {
 }
 
 func TestDestroy(t *testing.T) {
-	repoDir, cleanup := setupTestRepo(t)
-	defer cleanup()
+	repoDir := setupTestRepo(t)
 
 	b, _ := New(backend.BackendConfig{})
 	ctx := context.Background()
@@ -482,8 +455,7 @@ func TestDestroy(t *testing.T) {
 }
 
 func TestList(t *testing.T) {
-	repoDir, cleanup := setupTestRepo(t)
-	defer cleanup()
+	repoDir := setupTestRepo(t)
 
 	b := &Backend{repoRoot: repoDir}
 	ctx := context.Background()
@@ -621,8 +593,7 @@ func TestIsChoirManaged(t *testing.T) {
 }
 
 func TestContextCancellation(t *testing.T) {
-	repoDir, cleanup := setupTestRepo(t)
-	defer cleanup()
+	repoDir := setupTestRepo(t)
 
 	b, _ := New(backend.BackendConfig{})
 	ctx, cancel := context.WithCancel(context.Background())

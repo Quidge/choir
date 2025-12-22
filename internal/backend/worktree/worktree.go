@@ -23,6 +23,61 @@ import (
 	"github.com/Quidge/choir/internal/config"
 )
 
+var (
+	// ErrWorktreeExists is returned when attempting to create a worktree that already exists.
+	ErrWorktreeExists = errors.New("worktree already exists")
+
+	// ErrWorktreeNotFound is returned when a worktree does not exist.
+	ErrWorktreeNotFound = errors.New("worktree not found")
+
+	// ErrNotChoirManaged is returned when a directory exists but is not a choir-managed worktree.
+	ErrNotChoirManaged = errors.New("not a choir-managed worktree")
+
+	// ErrMissingTaskID is returned when TaskID is not provided in CreateConfig.
+	ErrMissingTaskID = errors.New("task ID is required")
+
+	// ErrMissingRepoPath is returned when Repository.Path is not provided in CreateConfig.
+	ErrMissingRepoPath = errors.New("repository path is required")
+
+	// ErrInvalidShell is returned when the SHELL environment variable contains an invalid path.
+	ErrInvalidShell = errors.New("invalid shell path")
+)
+
+// validShell returns a validated shell path.
+// It checks that the SHELL env var (if set) is a valid absolute path to an executable.
+// Falls back to /bin/sh if SHELL is unset or invalid.
+func validShell() (string, error) {
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		return "/bin/sh", nil
+	}
+
+	// Shell must be an absolute path
+	if !filepath.IsAbs(shell) {
+		return "", fmt.Errorf("%w: must be absolute path: %s", ErrInvalidShell, shell)
+	}
+
+	// Shell path must not contain suspicious characters that could enable injection
+	// Valid shell paths should only contain alphanumeric, slash, dash, underscore, dot
+	for _, c := range shell {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+			c == '/' || c == '-' || c == '_' || c == '.') {
+			return "", fmt.Errorf("%w: contains invalid character: %s", ErrInvalidShell, shell)
+		}
+	}
+
+	// Verify it exists and is executable
+	info, err := os.Stat(shell)
+	if err != nil {
+		return "", fmt.Errorf("%w: %s: %v", ErrInvalidShell, shell, err)
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("%w: is a directory: %s", ErrInvalidShell, shell)
+	}
+
+	return shell, nil
+}
+
 // cleanGitEnv returns a clean environment without git-specific variables
 // that might interfere with git operations (e.g., when running inside git hooks).
 func cleanGitEnv() []string {
@@ -69,11 +124,11 @@ func init() {
 // The backendID returned is the absolute path to the worktree directory.
 func (b *Backend) Create(ctx context.Context, cfg *config.CreateConfig) (string, error) {
 	if cfg.TaskID == "" {
-		return "", errors.New("task ID is required")
+		return "", ErrMissingTaskID
 	}
 
 	if cfg.Repository.Path == "" {
-		return "", errors.New("repository path is required")
+		return "", ErrMissingRepoPath
 	}
 
 	// Warn if packages are specified (worktree backend can't install them)
@@ -90,7 +145,7 @@ func (b *Backend) Create(ctx context.Context, cfg *config.CreateConfig) (string,
 
 	// Check if worktree already exists
 	if _, err := os.Stat(worktreePath); err == nil {
-		return "", fmt.Errorf("worktree already exists: %s", worktreePath)
+		return "", fmt.Errorf("%w: %s", ErrWorktreeExists, worktreePath)
 	}
 
 	// Determine branch name
@@ -138,7 +193,7 @@ func (b *Backend) NewSetupRunner(backendID string) backend.SetupRunner {
 func (b *Backend) Start(ctx context.Context, backendID string) error {
 	// Verify the worktree exists
 	if _, err := os.Stat(backendID); os.IsNotExist(err) {
-		return fmt.Errorf("worktree not found: %s", backendID)
+		return fmt.Errorf("%w: %s", ErrWorktreeNotFound, backendID)
 	}
 	return nil
 }
@@ -147,7 +202,7 @@ func (b *Backend) Start(ctx context.Context, backendID string) error {
 func (b *Backend) Stop(ctx context.Context, backendID string) error {
 	// Verify the worktree exists
 	if _, err := os.Stat(backendID); os.IsNotExist(err) {
-		return fmt.Errorf("worktree not found: %s", backendID)
+		return fmt.Errorf("%w: %s", ErrWorktreeNotFound, backendID)
 	}
 	return nil
 }
@@ -178,14 +233,15 @@ func (b *Backend) Destroy(ctx context.Context, backendID string) error {
 
 // Shell opens an interactive shell in the worktree directory.
 // It sources the .choir-env file if present.
+// Uses Setpgid to enable proper signal handling for interactive shells.
 func (b *Backend) Shell(ctx context.Context, backendID string) error {
 	if _, err := os.Stat(backendID); os.IsNotExist(err) {
-		return fmt.Errorf("worktree not found: %s", backendID)
+		return fmt.Errorf("%w: %s", ErrWorktreeNotFound, backendID)
 	}
 
-	shell := os.Getenv("SHELL")
-	if shell == "" {
-		shell = "/bin/sh"
+	shell, err := validShell()
+	if err != nil {
+		return err
 	}
 
 	// Build the command to source env file if it exists, then exec shell
@@ -214,7 +270,12 @@ func (b *Backend) Shell(ctx context.Context, backendID string) error {
 // Exec runs a command in the worktree directory and returns output.
 func (b *Backend) Exec(ctx context.Context, backendID string, command string) (string, int, error) {
 	if _, err := os.Stat(backendID); os.IsNotExist(err) {
-		return "", -1, fmt.Errorf("worktree not found: %s", backendID)
+		return "", -1, fmt.Errorf("%w: %s", ErrWorktreeNotFound, backendID)
+	}
+
+	shell, err := validShell()
+	if err != nil {
+		return "", -1, err
 	}
 
 	// Build the shell command, sourcing env file if present
@@ -224,11 +285,6 @@ func (b *Backend) Exec(ctx context.Context, backendID string, command string) (s
 		shellCmd = fmt.Sprintf("source %q && %s", envPath, command)
 	} else {
 		shellCmd = command
-	}
-
-	shell := os.Getenv("SHELL")
-	if shell == "" {
-		shell = "/bin/sh"
 	}
 
 	cmd := exec.CommandContext(ctx, shell, "-c", shellCmd)

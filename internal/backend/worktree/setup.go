@@ -3,6 +3,7 @@ package worktree
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -178,9 +179,9 @@ func (r *HostSetupRunner) runCommands(ctx context.Context, commands []string) er
 		return nil
 	}
 
-	shell := os.Getenv("SHELL")
-	if shell == "" {
-		shell = "/bin/sh"
+	shell, err := validShell()
+	if err != nil {
+		return err
 	}
 
 	envPath := filepath.Join(r.WorkDir, envFile)
@@ -211,19 +212,27 @@ func (r *HostSetupRunner) runCommands(ctx context.Context, commands []string) er
 	return nil
 }
 
-// copyFile copies a single file from src to dst.
+// copyFile copies a single file from src to dst using streaming to handle large files.
 func copyFile(src, dst string) error {
-	data, err := os.ReadFile(src)
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	srcInfo, err := in.Stat()
 	if err != nil {
 		return err
 	}
 
-	srcInfo, err := os.Stat(src)
+	out, err := os.OpenFile(dst, os.O_RDWR|os.O_CREATE|os.O_TRUNC, srcInfo.Mode())
 	if err != nil {
 		return err
 	}
+	defer out.Close()
 
-	return os.WriteFile(dst, data, srcInfo.Mode())
+	_, err = io.Copy(out, in)
+	return err
 }
 
 // copyDir recursively copies a directory from src to dst.
