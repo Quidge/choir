@@ -6,6 +6,7 @@
   },
   "permissions": {
     "allow": [
+      "Bash(./bin/choir:*)",
       "Bash(./scripts/release.sh:*)",
       "Bash(cat:*)",
       "Bash(find:*)",
@@ -35,6 +36,7 @@
       "Bash(ls:*)",
       "Bash(mkdir:*)",
       "Bash(shellcheck:*)",
+      "Bash(sort:*)",
       "Bash(tree:*)",
       "Bash(xargs ls:*)",
       "Skill(git-commit-and-pull-request-message)",
