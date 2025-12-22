@@ -13,4 +13,8 @@ Like the body of a commit message, we should emphasize the WHY of the work being
 
 If the pull request contains multiple commits, the pull request body should summarize the commits together. Otherwise, the pull request can be the same as the commit message.
 
-NOTE: If a pull request is being made to satisfy a specific github issue, that issue should be referenced in the pull request body. If the pull request CLOSES the github issue, that should also be cited with "Closes #<issue number>"
+## Commits and pull requests citing GitHub issues
+
+If a pull request is being made to satisfy a specific github issue, that issue should be referenced in the pull request body. If the pull request CLOSES the github issue, that should also be cited with "Closes #<issue number>"
+
+If, during the implementation of work to satisfy a ticket, a deviation was made away from the design or direction specified in the issue body, that deviation should be explicitly called out in the PR body.
