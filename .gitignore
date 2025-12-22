@@ -2,11 +2,10 @@
 # https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
 #
 # Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
+bin/
+
+# Goreleaser
+dist/
 
 # Test binary, built with `go test -c`
 *.test
@@ -30,3 +29,6 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Local claude code
+.claude/settings.local.json
