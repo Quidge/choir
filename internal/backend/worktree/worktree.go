@@ -17,7 +17,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 
 	"github.com/Quidge/choir/internal/backend"
 	"github.com/Quidge/choir/internal/config"
@@ -233,7 +232,6 @@ func (b *Backend) Destroy(ctx context.Context, backendID string) error {
 
 // Shell opens an interactive shell in the worktree directory.
 // It sources the .choir-env file if present.
-// Uses Setpgid to enable proper signal handling for interactive shells.
 func (b *Backend) Shell(ctx context.Context, backendID string) error {
 	if _, err := os.Stat(backendID); os.IsNotExist(err) {
 		return fmt.Errorf("%w: %s", ErrWorktreeNotFound, backendID)
@@ -258,11 +256,6 @@ func (b *Backend) Shell(ctx context.Context, backendID string) error {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-
-	// Set up process group for signal handling
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setpgid: true,
-	}
 
 	return cmd.Run()
 }
