@@ -107,6 +107,77 @@ type MergedConfig struct {
 	BranchPrefix string
 }
 
+// RepositoryInfo contains information about the git repository.
+type RepositoryInfo struct {
+	// Path is the absolute path to the repository root.
+	Path string
+
+	// RemoteURL is the URL of the origin remote.
+	// May be empty if no remote is configured.
+	RemoteURL string
+
+	// BaseBranch is the branch to base new work on.
+	BaseBranch string
+}
+
+// CreateConfig is the unified configuration passed to Backend.Create().
+// It combines data from global config, project config, CLI flags, and git repository info.
+//
+// Not all fields apply to all backends. The struct is complete, but backends
+// may ignore fields that don't apply to them. See the backend applicability table:
+//
+//	| Field            | Worktree         | Lima             |
+//	|------------------|------------------|------------------|
+//	| TaskID           | ✓ Used           | ✓ Used           |
+//	| Resources.*      | Ignored (no VM)  | ✓ Used           |
+//	| Credentials.*    | Ignored (host)   | ✓ Used           |
+//	| Repository.*     | ✓ Used           | ✓ Used           |
+//	| Environment      | ✓ Used (export)  | ✓ Used           |
+//	| Files            | ✓ Used (symlink) | ✓ Used           |
+//	| Packages         | Warn if present  | ✓ Used           |
+//	| SetupCommands    | ✓ Used (on host) | ✓ Used           |
+type CreateConfig struct {
+	// TaskID is the unique identifier for this agent instance.
+	TaskID string
+
+	// Backend is the name of the backend to use (e.g., "local").
+	Backend string
+
+	// BackendType is the type of backend (e.g., "lima", "worktree").
+	BackendType string
+
+	// Resources contains resource allocation settings.
+	// Worktree backend ignores these (no VM).
+	Resources Resources
+
+	// Credentials contains paths to credential files/directories.
+	// Worktree backend ignores these (uses host credentials).
+	Credentials CredentialsConfig
+
+	// Repository contains git repository information.
+	Repository RepositoryInfo
+
+	// BaseImage is the VM base image (e.g., "ubuntu:22.04").
+	// Only used by Lima backend.
+	BaseImage string
+
+	// Packages are system packages to install.
+	// Worktree backend warns if present.
+	Packages []string
+
+	// Environment contains expanded environment variables to set.
+	Environment map[string]string
+
+	// Files are file/directory mounts to copy into the environment.
+	Files []FileMount
+
+	// SetupCommands are commands to run after environment setup.
+	SetupCommands []string
+
+	// BranchPrefix is the prefix for agent branch names.
+	BranchPrefix string
+}
+
 // DefaultGlobalConfig returns a GlobalConfig with sensible defaults.
 func DefaultGlobalConfig() GlobalConfig {
 	return GlobalConfig{
