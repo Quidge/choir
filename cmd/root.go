@@ -12,8 +12,8 @@ var (
 	Version = "dev"
 
 	// Global flags
-	backend string
-	verbose bool
+	backendFlag string
+	verbose     bool
 )
 
 var rootCmd = &cobra.Command{
@@ -34,6 +34,6 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&backend, "backend", "", "override default backend")
+	rootCmd.PersistentFlags().StringVar(&backendFlag, "backend", "", "override default backend")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose output")
 }
