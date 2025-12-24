@@ -128,7 +128,7 @@ type RepositoryInfo struct {
 //
 //	| Field            | Worktree         | Lima             |
 //	|------------------|------------------|------------------|
-//	| TaskID           | ✓ Used           | ✓ Used           |
+//	| ID               | ✓ Used           | ✓ Used           |
 //	| Resources.*      | Ignored (no VM)  | ✓ Used           |
 //	| Credentials.*    | Ignored (host)   | ✓ Used           |
 //	| Repository.*     | ✓ Used           | ✓ Used           |
@@ -137,8 +137,8 @@ type RepositoryInfo struct {
 //	| Packages         | Warn if present  | ✓ Used           |
 //	| SetupCommands    | ✓ Used (on host) | ✓ Used           |
 type CreateConfig struct {
-	// TaskID is the unique identifier for this agent instance.
-	TaskID string
+	// ID is the unique identifier for this environment (32 hex chars).
+	ID string
 
 	// Backend is the name of the backend to use (e.g., "local").
 	Backend string
@@ -174,7 +174,7 @@ type CreateConfig struct {
 	// SetupCommands are commands to run after environment setup.
 	SetupCommands []string
 
-	// BranchPrefix is the prefix for agent branch names.
+	// BranchPrefix is the prefix for environment branch names (default: "env/").
 	BranchPrefix string
 }
 
@@ -205,6 +205,6 @@ func DefaultGlobalConfig() GlobalConfig {
 func DefaultProjectConfig() ProjectConfig {
 	return ProjectConfig{
 		Version:      1,
-		BranchPrefix: "agent/",
+		BranchPrefix: "env/",
 	}
 }

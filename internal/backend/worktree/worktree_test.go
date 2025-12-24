@@ -93,12 +93,12 @@ func TestCreate(t *testing.T) {
 	ctx := context.Background()
 
 	cfg := &config.CreateConfig{
-		TaskID: "test-task",
+		ID: "abc123def456abc123def456abc12345",
 		Repository: config.RepositoryInfo{
 			Path:       repoDir,
 			BaseBranch: "HEAD",
 		},
-		BranchPrefix: "agent/",
+		BranchPrefix: "env/",
 	}
 
 	backendID, err := b.Create(ctx, cfg)
@@ -118,14 +118,14 @@ func TestCreate(t *testing.T) {
 		t.Error("marker file was not created")
 	}
 
-	// Verify worktree is in correct location
-	expectedPath := filepath.Join(filepath.Dir(repoDir), "choir-test-task")
+	// Verify worktree is in correct location (uses short ID - first 12 chars)
+	expectedPath := filepath.Join(filepath.Dir(repoDir), "choir-abc123def456")
 	if backendID != expectedPath {
 		t.Errorf("expected backendID %q, got %q", expectedPath, backendID)
 	}
 }
 
-func TestCreateMissingTaskID(t *testing.T) {
+func TestCreateMissingID(t *testing.T) {
 	b, _ := New(backend.BackendConfig{})
 	ctx := context.Background()
 
@@ -137,10 +137,10 @@ func TestCreateMissingTaskID(t *testing.T) {
 
 	_, err := b.Create(ctx, cfg)
 	if err == nil {
-		t.Fatal("expected error for missing task ID")
+		t.Fatal("expected error for missing ID")
 	}
-	if !errors.Is(err, ErrMissingTaskID) {
-		t.Errorf("expected ErrMissingTaskID, got: %v", err)
+	if !errors.Is(err, ErrMissingID) {
+		t.Errorf("expected ErrMissingID, got: %v", err)
 	}
 }
 
@@ -149,7 +149,7 @@ func TestCreateMissingRepoPath(t *testing.T) {
 	ctx := context.Background()
 
 	cfg := &config.CreateConfig{
-		TaskID: "test-task",
+		ID: "abc123def456abc123def456abc12345",
 	}
 
 	_, err := b.Create(ctx, cfg)
@@ -168,7 +168,7 @@ func TestCreateDuplicate(t *testing.T) {
 	ctx := context.Background()
 
 	cfg := &config.CreateConfig{
-		TaskID: "dup-task",
+		ID: "dup123def456abc123def456abc12345",
 		Repository: config.RepositoryInfo{
 			Path:       repoDir,
 			BaseBranch: "HEAD",
@@ -198,7 +198,7 @@ func TestStatus(t *testing.T) {
 	ctx := context.Background()
 
 	cfg := &config.CreateConfig{
-		TaskID: "status-task",
+		ID: "stat12def456abc123def456abc12345",
 		Repository: config.RepositoryInfo{
 			Path:       repoDir,
 			BaseBranch: "HEAD",
@@ -259,7 +259,7 @@ func TestStartStop(t *testing.T) {
 	ctx := context.Background()
 
 	cfg := &config.CreateConfig{
-		TaskID: "startstop-task",
+		ID: "stst12def456abc123def456abc12345",
 		Repository: config.RepositoryInfo{
 			Path:       repoDir,
 			BaseBranch: "HEAD",
@@ -310,7 +310,7 @@ func TestExec(t *testing.T) {
 	ctx := context.Background()
 
 	cfg := &config.CreateConfig{
-		TaskID: "exec-task",
+		ID: "exec12def456abc123def456abc12345",
 		Repository: config.RepositoryInfo{
 			Path:       repoDir,
 			BaseBranch: "HEAD",
@@ -343,7 +343,7 @@ func TestExecWithEnv(t *testing.T) {
 	ctx := context.Background()
 
 	cfg := &config.CreateConfig{
-		TaskID: "exec-env-task",
+		ID: "exenv2def456abc123def456abc12345",
 		Repository: config.RepositoryInfo{
 			Path:       repoDir,
 			BaseBranch: "HEAD",
@@ -397,7 +397,7 @@ func TestExecFailingCommand(t *testing.T) {
 	ctx := context.Background()
 
 	cfg := &config.CreateConfig{
-		TaskID: "exec-fail-task",
+		ID: "fail12def456abc123def456abc12345",
 		Repository: config.RepositoryInfo{
 			Path:       repoDir,
 			BaseBranch: "HEAD",
@@ -426,7 +426,7 @@ func TestDestroy(t *testing.T) {
 	ctx := context.Background()
 
 	cfg := &config.CreateConfig{
-		TaskID: "destroy-task",
+		ID: "dest12def456abc123def456abc12345",
 		Repository: config.RepositoryInfo{
 			Path:       repoDir,
 			BaseBranch: "HEAD",
@@ -461,12 +461,12 @@ func TestList(t *testing.T) {
 	ctx := context.Background()
 
 	// Create multiple worktrees
-	taskIDs := []string{"list-task-1", "list-task-2"}
+	envIDs := []string{"list1def456abc123def456abc12345", "list2def456abc123def456abc12345"}
 	var backendIDs []string
 
-	for _, taskID := range taskIDs {
+	for _, envID := range envIDs {
 		cfg := &config.CreateConfig{
-			TaskID: taskID,
+			ID: envID,
 			Repository: config.RepositoryInfo{
 				Path:       repoDir,
 				BaseBranch: "HEAD",
@@ -475,7 +475,7 @@ func TestList(t *testing.T) {
 
 		id, err := b.Create(ctx, cfg)
 		if err != nil {
-			t.Fatalf("Create(%s) failed: %v", taskID, err)
+			t.Fatalf("Create(%s) failed: %v", envID, err)
 		}
 		backendIDs = append(backendIDs, id)
 	}
@@ -600,7 +600,7 @@ func TestContextCancellation(t *testing.T) {
 	cancel() // Cancel immediately
 
 	cfg := &config.CreateConfig{
-		TaskID: "cancel-task",
+		ID: "canc12def456abc123def456abc12345",
 		Repository: config.RepositoryInfo{
 			Path:       repoDir,
 			BaseBranch: "HEAD",

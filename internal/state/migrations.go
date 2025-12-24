@@ -39,6 +39,29 @@ CREATE INDEX idx_agents_backend ON agents(backend);
 CREATE INDEX idx_agents_status ON agents(status);
 `,
 	},
+	{
+		version: 2,
+		name:    "create_environments_table",
+		up: `
+CREATE TABLE environments (
+    id            TEXT PRIMARY KEY,
+    backend       TEXT NOT NULL,
+    backend_id    TEXT,
+    repo_path     TEXT NOT NULL,
+    remote_url    TEXT,
+    branch_name   TEXT NOT NULL,
+    base_branch   TEXT NOT NULL,
+    created_at    TEXT NOT NULL,
+    status        TEXT NOT NULL
+);
+
+CREATE INDEX idx_environments_repo ON environments(repo_path);
+CREATE INDEX idx_environments_backend ON environments(backend);
+CREATE INDEX idx_environments_status ON environments(status);
+
+DROP TABLE IF EXISTS agents;
+`,
+	},
 }
 
 // migrate runs all pending migrations.

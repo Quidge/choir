@@ -2,10 +2,10 @@
 // This backend creates isolated workspaces using git worktrees instead of VMs.
 //
 // Key characteristics:
-//   - No process/network isolation (all agents share host environment)
+//   - No process/network isolation (all environments share host environment)
 //   - Fast creation (just git worktree add)
 //   - Shares host credentials (no copying needed)
-//   - Worktrees created at: <repo-parent>/choir-<task-id>/
+//   - Worktrees created at: <repo-parent>/choir-<short-id>/
 package worktree
 
 import (
@@ -32,8 +32,8 @@ var (
 	// ErrNotChoirManaged is returned when a directory exists but is not a choir-managed worktree.
 	ErrNotChoirManaged = errors.New("not a choir-managed worktree")
 
-	// ErrMissingTaskID is returned when TaskID is not provided in CreateConfig.
-	ErrMissingTaskID = errors.New("task ID is required")
+	// ErrMissingID is returned when ID is not provided in CreateConfig.
+	ErrMissingID = errors.New("environment ID is required")
 
 	// ErrMissingRepoPath is returned when Repository.Path is not provided in CreateConfig.
 	ErrMissingRepoPath = errors.New("repository path is required")
@@ -94,7 +94,7 @@ const (
 	BackendType = "worktree"
 
 	// markerFile is the file created in each worktree to identify it as choir-managed.
-	markerFile = ".choir-agent"
+	markerFile = ".choir-env-marker"
 
 	// envFile is the file where environment variables are stored.
 	envFile = ".choir-env"
@@ -122,8 +122,8 @@ func init() {
 // Create provisions a new workspace using git worktree.
 // The backendID returned is the absolute path to the worktree directory.
 func (b *Backend) Create(ctx context.Context, cfg *config.CreateConfig) (string, error) {
-	if cfg.TaskID == "" {
-		return "", ErrMissingTaskID
+	if cfg.ID == "" {
+		return "", ErrMissingID
 	}
 
 	if cfg.Repository.Path == "" {
@@ -138,19 +138,25 @@ func (b *Backend) Create(ctx context.Context, cfg *config.CreateConfig) (string,
 	repoRoot := cfg.Repository.Path
 	b.repoRoot = repoRoot
 
-	// Determine worktree location: <repo-parent>/choir-<task-id>/
+	// Use short ID (first 12 chars) for directory and branch names
+	shortID := cfg.ID
+	if len(shortID) > 12 {
+		shortID = shortID[:12]
+	}
+
+	// Determine worktree location: <repo-parent>/choir-<short-id>/
 	repoParent := filepath.Dir(repoRoot)
-	worktreePath := filepath.Join(repoParent, worktreePrefix+cfg.TaskID)
+	worktreePath := filepath.Join(repoParent, worktreePrefix+shortID)
 
 	// Check if worktree already exists
 	if _, err := os.Stat(worktreePath); err == nil {
 		return "", fmt.Errorf("%w: %s", ErrWorktreeExists, worktreePath)
 	}
 
-	// Determine branch name
-	branchName := cfg.BranchPrefix + cfg.TaskID
+	// Determine branch name: <prefix><short-id>
+	branchName := cfg.BranchPrefix + shortID
 	if cfg.BranchPrefix == "" {
-		branchName = "agent/" + cfg.TaskID
+		branchName = "env/" + shortID
 	}
 
 	// Determine base branch
@@ -171,7 +177,7 @@ func (b *Backend) Create(ctx context.Context, cfg *config.CreateConfig) (string,
 
 	// Create the marker file to identify this as a choir-managed worktree
 	markerPath := filepath.Join(worktreePath, markerFile)
-	markerContent := fmt.Sprintf("task_id: %s\ncreated_by: choir\n", cfg.TaskID)
+	markerContent := fmt.Sprintf("id: %s\ncreated_by: choir\n", cfg.ID)
 	if err := os.WriteFile(markerPath, []byte(markerContent), 0644); err != nil {
 		// Try to clean up the worktree on failure
 		_ = b.Destroy(ctx, worktreePath)

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"os"
 	"os/exec"
@@ -91,28 +90,8 @@ func openTestDB(t *testing.T) *state.DB {
 	return db
 }
 
-// TestSpawnCommand tests the spawn command logic.
-func TestSpawnCommand(t *testing.T) {
-	t.Run("validates task ID", func(t *testing.T) {
-		// Test with invalid task ID containing spaces
-		rootCmd.SetArgs([]string{"spawn", "invalid task"})
-		err := rootCmd.Execute()
-		if err == nil {
-			t.Error("expected error for invalid task ID")
-		}
-	})
-
-	t.Run("validates task ID with special chars", func(t *testing.T) {
-		rootCmd.SetArgs([]string{"spawn", "task~with~tilde"})
-		err := rootCmd.Execute()
-		if err == nil {
-			t.Error("expected error for invalid task ID with tilde")
-		}
-	})
-}
-
-// TestSpawnIntegration tests the spawn command with real git repo and database.
-func TestSpawnIntegration(t *testing.T) {
+// TestEnvCreateIntegration tests the env create flow with real git repo and database.
+func TestEnvCreateIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
@@ -137,33 +116,37 @@ func TestSpawnIntegration(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	taskID := "test-spawn"
+	envID, err := state.GenerateID()
+	if err != nil {
+		t.Fatalf("failed to generate ID: %v", err)
+	}
+	shortID := state.ShortID(envID)
 
-	// Build config manually (simulating what spawn does)
+	// Build config manually (simulating what env create does)
 	createCfg := &config.CreateConfig{
-		TaskID:       taskID,
+		ID:           envID,
 		Backend:      "local",
 		BackendType:  "worktree",
-		BranchPrefix: "agent/",
+		BranchPrefix: "env/",
 		Repository: config.RepositoryInfo{
 			Path:       repoDir,
 			BaseBranch: "HEAD",
 		},
 	}
 
-	// Create agent record
-	agent := &state.Agent{
-		TaskID:     taskID,
+	// Create environment record
+	env := &state.Environment{
+		ID:         envID,
 		Backend:    "local",
 		RepoPath:   repoDir,
-		BranchName: "agent/" + taskID,
+		BranchName: "env/" + shortID,
 		BaseBranch: "HEAD",
 		CreatedAt:  time.Now(),
 		Status:     state.StatusProvisioning,
 	}
 
-	if err := db.CreateAgent(agent); err != nil {
-		t.Fatalf("failed to create agent: %v", err)
+	if err := db.CreateEnvironment(env); err != nil {
+		t.Fatalf("failed to create environment: %v", err)
 	}
 
 	// Create worktree
@@ -173,11 +156,11 @@ func TestSpawnIntegration(t *testing.T) {
 	}
 	defer be.Destroy(ctx, backendID)
 
-	// Update agent
-	agent.BackendID = backendID
-	agent.Status = state.StatusRunning
-	if err := db.UpdateAgent(agent); err != nil {
-		t.Fatalf("failed to update agent: %v", err)
+	// Update environment
+	env.BackendID = backendID
+	env.Status = state.StatusReady
+	if err := db.UpdateEnvironment(env); err != nil {
+		t.Fatalf("failed to update environment: %v", err)
 	}
 
 	// Verify worktree exists
@@ -185,139 +168,139 @@ func TestSpawnIntegration(t *testing.T) {
 		t.Error("worktree was not created")
 	}
 
-	// Verify agent in database
-	gotAgent, err := db.GetAgent(taskID)
+	// Verify environment in database
+	gotEnv, err := db.GetEnvironment(envID)
 	if err != nil {
-		t.Fatalf("failed to get agent: %v", err)
+		t.Fatalf("failed to get environment: %v", err)
 	}
 
-	if gotAgent.Status != state.StatusRunning {
-		t.Errorf("expected status running, got %s", gotAgent.Status)
+	if gotEnv.Status != state.StatusReady {
+		t.Errorf("expected status ready, got %s", gotEnv.Status)
 	}
 
-	if gotAgent.BackendID != backendID {
-		t.Errorf("expected backendID %s, got %s", backendID, gotAgent.BackendID)
+	if gotEnv.BackendID != backendID {
+		t.Errorf("expected backendID %s, got %s", backendID, gotEnv.BackendID)
 	}
 }
 
-// TestAttachCommand tests the attach command logic.
-func TestAttachCommand(t *testing.T) {
+// TestEnvAttachCommand tests the attach command logic.
+func TestEnvAttachCommand(t *testing.T) {
 	db := openTestDB(t)
 
-	t.Run("agent not found", func(t *testing.T) {
-		_, err := db.GetAgent("nonexistent")
+	t.Run("environment not found", func(t *testing.T) {
+		_, err := db.GetEnvironmentByPrefix("nonexistent")
 		if err == nil {
-			t.Error("expected error for nonexistent agent")
+			t.Error("expected error for nonexistent environment")
 		}
 	})
 
-	t.Run("agent removed status", func(t *testing.T) {
-		agent := &state.Agent{
-			TaskID:     "removed-agent",
+	t.Run("environment removed status", func(t *testing.T) {
+		env := &state.Environment{
+			ID:         "removed123456789012345678901234",
 			Backend:    "local",
 			RepoPath:   "/test",
-			BranchName: "agent/removed",
+			BranchName: "env/removed",
 			BaseBranch: "main",
 			CreatedAt:  time.Now(),
 			Status:     state.StatusRemoved,
 		}
-		if err := db.CreateAgent(agent); err != nil {
-			t.Fatalf("failed to create agent: %v", err)
+		if err := db.CreateEnvironment(env); err != nil {
+			t.Fatalf("failed to create environment: %v", err)
 		}
 
-		gotAgent, err := db.GetAgent("removed-agent")
+		gotEnv, err := db.GetEnvironment("removed123456789012345678901234")
 		if err != nil {
-			t.Fatalf("failed to get agent: %v", err)
+			t.Fatalf("failed to get environment: %v", err)
 		}
 
-		if gotAgent.Status != state.StatusRemoved {
-			t.Errorf("expected status removed, got %s", gotAgent.Status)
+		if gotEnv.Status != state.StatusRemoved {
+			t.Errorf("expected status removed, got %s", gotEnv.Status)
 		}
 	})
 
-	t.Run("agent failed status", func(t *testing.T) {
-		agent := &state.Agent{
-			TaskID:     "failed-agent",
+	t.Run("environment failed status", func(t *testing.T) {
+		env := &state.Environment{
+			ID:         "failed1234567890123456789012345",
 			Backend:    "local",
 			RepoPath:   "/test",
-			BranchName: "agent/failed",
+			BranchName: "env/failed",
 			BaseBranch: "main",
 			CreatedAt:  time.Now(),
 			Status:     state.StatusFailed,
 		}
-		if err := db.CreateAgent(agent); err != nil {
-			t.Fatalf("failed to create agent: %v", err)
+		if err := db.CreateEnvironment(env); err != nil {
+			t.Fatalf("failed to create environment: %v", err)
 		}
 
-		gotAgent, err := db.GetAgent("failed-agent")
+		gotEnv, err := db.GetEnvironment("failed1234567890123456789012345")
 		if err != nil {
-			t.Fatalf("failed to get agent: %v", err)
+			t.Fatalf("failed to get environment: %v", err)
 		}
 
-		if gotAgent.Status != state.StatusFailed {
-			t.Errorf("expected status failed, got %s", gotAgent.Status)
+		if gotEnv.Status != state.StatusFailed {
+			t.Errorf("expected status failed, got %s", gotEnv.Status)
 		}
 	})
 }
 
-// TestListCommand tests the list command logic.
-func TestListCommand(t *testing.T) {
+// TestEnvListCommand tests the list command logic.
+func TestEnvListCommand(t *testing.T) {
 	db := openTestDB(t)
 
 	t.Run("empty list", func(t *testing.T) {
-		agents, err := db.ListAgents(state.ListOptions{})
+		envs, err := db.ListEnvironments(state.ListOptions{})
 		if err != nil {
-			t.Fatalf("failed to list agents: %v", err)
+			t.Fatalf("failed to list environments: %v", err)
 		}
 
-		if len(agents) != 0 {
-			t.Errorf("expected 0 agents, got %d", len(agents))
+		if len(envs) != 0 {
+			t.Errorf("expected 0 environments, got %d", len(envs))
 		}
 	})
 
-	t.Run("list with agents", func(t *testing.T) {
-		// Create test agents
-		for i, status := range []state.Status{state.StatusRunning, state.StatusStopped, state.StatusFailed} {
-			agent := &state.Agent{
-				TaskID:     string(rune('a' + i)),
+	t.Run("list with environments", func(t *testing.T) {
+		// Create test environments
+		for i, status := range []state.EnvironmentStatus{state.StatusReady, state.StatusProvisioning, state.StatusFailed} {
+			env := &state.Environment{
+				ID:         string(rune('a'+i)) + "bc123456789012345678901234567",
 				Backend:    "local",
 				RepoPath:   "/test",
-				BranchName: "agent/test",
+				BranchName: "env/test",
 				BaseBranch: "main",
 				CreatedAt:  time.Now(),
 				Status:     status,
 			}
-			if err := db.CreateAgent(agent); err != nil {
-				t.Fatalf("failed to create agent: %v", err)
+			if err := db.CreateEnvironment(env); err != nil {
+				t.Fatalf("failed to create environment: %v", err)
 			}
 		}
 
-		// List all agents
-		agents, err := db.ListAgents(state.ListOptions{})
+		// List all environments
+		envs, err := db.ListEnvironments(state.ListOptions{})
 		if err != nil {
-			t.Fatalf("failed to list agents: %v", err)
+			t.Fatalf("failed to list environments: %v", err)
 		}
 
-		if len(agents) != 3 {
-			t.Errorf("expected 3 agents, got %d", len(agents))
+		if len(envs) != 3 {
+			t.Errorf("expected 3 environments, got %d", len(envs))
 		}
 
-		// List only running agents
-		agents, err = db.ListAgents(state.ListOptions{
-			Statuses: []state.Status{state.StatusRunning, state.StatusStopped},
+		// List only ready/provisioning environments
+		envs, err = db.ListEnvironments(state.ListOptions{
+			Statuses: []state.EnvironmentStatus{state.StatusReady, state.StatusProvisioning},
 		})
 		if err != nil {
-			t.Fatalf("failed to list agents: %v", err)
+			t.Fatalf("failed to list environments: %v", err)
 		}
 
-		if len(agents) != 2 {
-			t.Errorf("expected 2 active agents, got %d", len(agents))
+		if len(envs) != 2 {
+			t.Errorf("expected 2 active environments, got %d", len(envs))
 		}
 	})
 }
 
-// TestRmCommand tests the rm command logic.
-func TestRmCommand(t *testing.T) {
+// TestEnvRmCommand tests the rm command logic.
+func TestEnvRmCommand(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
@@ -342,14 +325,15 @@ func TestRmCommand(t *testing.T) {
 		t.Fatalf("failed to get backend: %v", err)
 	}
 
-	taskID := "test-rm"
+	envID, _ := state.GenerateID()
+	shortID := state.ShortID(envID)
 
 	// Create worktree
 	createCfg := &config.CreateConfig{
-		TaskID:       taskID,
+		ID:           envID,
 		Backend:      "local",
 		BackendType:  "worktree",
-		BranchPrefix: "agent/",
+		BranchPrefix: "env/",
 		Repository: config.RepositoryInfo{
 			Path:       repoDir,
 			BaseBranch: "HEAD",
@@ -361,20 +345,20 @@ func TestRmCommand(t *testing.T) {
 		t.Fatalf("failed to create worktree: %v", err)
 	}
 
-	// Create agent record
-	agent := &state.Agent{
-		TaskID:     taskID,
+	// Create environment record
+	env := &state.Environment{
+		ID:         envID,
 		Backend:    "local",
 		BackendID:  backendID,
 		RepoPath:   repoDir,
-		BranchName: "agent/" + taskID,
+		BranchName: "env/" + shortID,
 		BaseBranch: "HEAD",
 		CreatedAt:  time.Now(),
-		Status:     state.StatusRunning,
+		Status:     state.StatusReady,
 	}
 
-	if err := db.CreateAgent(agent); err != nil {
-		t.Fatalf("failed to create agent: %v", err)
+	if err := db.CreateEnvironment(env); err != nil {
+		t.Fatalf("failed to create environment: %v", err)
 	}
 
 	// Verify worktree exists
@@ -387,9 +371,9 @@ func TestRmCommand(t *testing.T) {
 		t.Fatalf("failed to destroy worktree: %v", err)
 	}
 
-	// Delete agent from database
-	if err := db.DeleteAgent(taskID); err != nil {
-		t.Fatalf("failed to delete agent: %v", err)
+	// Delete environment from database
+	if err := db.DeleteEnvironment(envID); err != nil {
+		t.Fatalf("failed to delete environment record: %v", err)
 	}
 
 	// Verify worktree is gone
@@ -397,81 +381,81 @@ func TestRmCommand(t *testing.T) {
 		t.Error("worktree was not destroyed")
 	}
 
-	// Verify agent is gone from database
-	_, err = db.GetAgent(taskID)
+	// Verify environment is gone from database
+	_, err = db.GetEnvironment(envID)
 	if err == nil {
-		t.Error("expected agent to be deleted from database")
+		t.Error("expected environment to be deleted from database")
 	}
 }
 
-// TestListOutput tests the list command output format.
-func TestListOutput(t *testing.T) {
+// TestEnvListOutput tests the list command output format.
+func TestEnvListOutput(t *testing.T) {
 	db := openTestDB(t)
 
-	// Create a test agent
-	agent := &state.Agent{
-		TaskID:     "output-test",
+	// Create a test environment
+	env := &state.Environment{
+		ID:         "output1234567890123456789012345",
 		Backend:    "local",
 		BackendID:  "/path/to/worktree",
 		RepoPath:   "/test",
-		BranchName: "agent/output-test",
+		BranchName: "env/output123456",
 		BaseBranch: "main",
 		CreatedAt:  time.Now(),
-		Status:     state.StatusRunning,
+		Status:     state.StatusReady,
 	}
 
-	if err := db.CreateAgent(agent); err != nil {
-		t.Fatalf("failed to create agent: %v", err)
+	if err := db.CreateEnvironment(env); err != nil {
+		t.Fatalf("failed to create environment: %v", err)
 	}
 
-	// Get agents
-	agents, err := db.ListAgents(state.ListOptions{})
+	// Get environments
+	envs, err := db.ListEnvironments(state.ListOptions{})
 	if err != nil {
-		t.Fatalf("failed to list agents: %v", err)
+		t.Fatalf("failed to list environments: %v", err)
 	}
 
-	if len(agents) != 1 {
-		t.Fatalf("expected 1 agent, got %d", len(agents))
+	if len(envs) != 1 {
+		t.Fatalf("expected 1 environment, got %d", len(envs))
 	}
 
-	// Verify agent fields
-	gotAgent := agents[0]
-	if gotAgent.TaskID != "output-test" {
-		t.Errorf("expected task ID output-test, got %s", gotAgent.TaskID)
+	// Verify environment fields
+	gotEnv := envs[0]
+	if gotEnv.ID != "output1234567890123456789012345" {
+		t.Errorf("expected ID output..., got %s", gotEnv.ID)
 	}
-	if gotAgent.Status != state.StatusRunning {
-		t.Errorf("expected status running, got %s", gotAgent.Status)
+	if gotEnv.Status != state.StatusReady {
+		t.Errorf("expected status ready, got %s", gotEnv.Status)
 	}
-	if gotAgent.BranchName != "agent/output-test" {
-		t.Errorf("expected branch agent/output-test, got %s", gotAgent.BranchName)
+	if gotEnv.BranchName != "env/output123456" {
+		t.Errorf("expected branch env/output123456, got %s", gotEnv.BranchName)
 	}
-	if gotAgent.BackendID != "/path/to/worktree" {
-		t.Errorf("expected backendID /path/to/worktree, got %s", gotAgent.BackendID)
+	if gotEnv.BackendID != "/path/to/worktree" {
+		t.Errorf("expected backendID /path/to/worktree, got %s", gotEnv.BackendID)
 	}
 }
 
-// TestDuplicateAgent tests that creating a duplicate agent fails.
-func TestDuplicateAgent(t *testing.T) {
+// TestDuplicateEnvironment tests that creating a duplicate environment fails.
+func TestDuplicateEnvironment(t *testing.T) {
 	db := openTestDB(t)
 
-	agent := &state.Agent{
-		TaskID:     "duplicate-test",
+	env := &state.Environment{
+		ID:         "dup123456789012345678901234567",
 		Backend:    "local",
 		RepoPath:   "/test",
-		BranchName: "agent/test",
+		BranchName: "env/test",
 		BaseBranch: "main",
 		CreatedAt:  time.Now(),
-		Status:     state.StatusRunning,
+		Status:     state.StatusReady,
 	}
 
-	if err := db.CreateAgent(agent); err != nil {
-		t.Fatalf("first CreateAgent failed: %v", err)
+	if err := db.CreateEnvironment(env); err != nil {
+		t.Fatalf("first CreateEnvironment failed: %v", err)
 	}
 
 	// Try to create again - should fail
-	err := db.CreateAgent(agent)
+	err := db.CreateEnvironment(env)
 	if err == nil {
-		t.Error("expected error for duplicate agent")
+		t.Error("expected error for duplicate environment")
 	}
 }
 
@@ -489,125 +473,57 @@ func TestBackendRegistration(t *testing.T) {
 	}
 }
 
-// TestAgentStatusTransitions tests valid status transitions.
-func TestAgentStatusTransitions(t *testing.T) {
+// TestEnvironmentStatusTransitions tests valid status transitions.
+func TestEnvironmentStatusTransitions(t *testing.T) {
 	db := openTestDB(t)
 
-	agent := &state.Agent{
-		TaskID:     "status-test",
+	env := &state.Environment{
+		ID:         "trans1234567890123456789012345",
 		Backend:    "local",
 		RepoPath:   "/test",
-		BranchName: "agent/test",
+		BranchName: "env/test",
 		BaseBranch: "main",
 		CreatedAt:  time.Now(),
 		Status:     state.StatusProvisioning,
 	}
 
-	if err := db.CreateAgent(agent); err != nil {
-		t.Fatalf("CreateAgent failed: %v", err)
+	if err := db.CreateEnvironment(env); err != nil {
+		t.Fatalf("CreateEnvironment failed: %v", err)
 	}
 
-	// Transition to running
-	agent.Status = state.StatusRunning
-	if err := db.UpdateAgent(agent); err != nil {
-		t.Fatalf("UpdateAgent to running failed: %v", err)
+	// Transition to ready
+	env.Status = state.StatusReady
+	if err := db.UpdateEnvironment(env); err != nil {
+		t.Fatalf("UpdateEnvironment to ready failed: %v", err)
 	}
 
-	gotAgent, _ := db.GetAgent("status-test")
-	if gotAgent.Status != state.StatusRunning {
-		t.Errorf("expected running, got %s", gotAgent.Status)
-	}
-
-	// Transition to stopped
-	agent.Status = state.StatusStopped
-	if err := db.UpdateAgent(agent); err != nil {
-		t.Fatalf("UpdateAgent to stopped failed: %v", err)
-	}
-
-	gotAgent, _ = db.GetAgent("status-test")
-	if gotAgent.Status != state.StatusStopped {
-		t.Errorf("expected stopped, got %s", gotAgent.Status)
+	gotEnv, _ := db.GetEnvironment("trans1234567890123456789012345")
+	if gotEnv.Status != state.StatusReady {
+		t.Errorf("expected ready, got %s", gotEnv.Status)
 	}
 
 	// Transition to removed
-	agent.Status = state.StatusRemoved
-	if err := db.UpdateAgent(agent); err != nil {
-		t.Fatalf("UpdateAgent to removed failed: %v", err)
+	env.Status = state.StatusRemoved
+	if err := db.UpdateEnvironment(env); err != nil {
+		t.Fatalf("UpdateEnvironment to removed failed: %v", err)
 	}
 
-	gotAgent, _ = db.GetAgent("status-test")
-	if gotAgent.Status != state.StatusRemoved {
-		t.Errorf("expected removed, got %s", gotAgent.Status)
+	gotEnv, _ = db.GetEnvironment("trans1234567890123456789012345")
+	if gotEnv.Status != state.StatusRemoved {
+		t.Errorf("expected removed, got %s", gotEnv.Status)
 	}
 }
 
-// TestCobraCommands verifies all commands are registered with root.
+// TestCobraCommands verifies env command is registered with root.
 func TestCobraCommands(t *testing.T) {
-	commands := []string{"spawn", "attach", "list", "rm"}
-
-	for _, name := range commands {
-		found := false
-		for _, cmd := range rootCmd.Commands() {
-			if strings.HasPrefix(cmd.Use, name) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("command %q not found in root command", name)
+	found := false
+	for _, cmd := range rootCmd.Commands() {
+		if strings.HasPrefix(cmd.Use, "env") {
+			found = true
+			break
 		}
 	}
-}
-
-// TestSpawnRequiresTaskID verifies spawn requires exactly one argument.
-func TestSpawnRequiresTaskID(t *testing.T) {
-	// Reset output for clean test
-	buf := new(bytes.Buffer)
-	rootCmd.SetOut(buf)
-	rootCmd.SetErr(buf)
-
-	rootCmd.SetArgs([]string{"spawn"})
-	err := rootCmd.Execute()
-	if err == nil {
-		t.Error("expected error when no task ID provided")
-	}
-}
-
-// TestAttachRequiresTaskID verifies attach requires exactly one argument.
-func TestAttachRequiresTaskID(t *testing.T) {
-	buf := new(bytes.Buffer)
-	rootCmd.SetOut(buf)
-	rootCmd.SetErr(buf)
-
-	rootCmd.SetArgs([]string{"attach"})
-	err := rootCmd.Execute()
-	if err == nil {
-		t.Error("expected error when no task ID provided")
-	}
-}
-
-// TestRmRequiresTaskID verifies rm requires exactly one argument.
-func TestRmRequiresTaskID(t *testing.T) {
-	buf := new(bytes.Buffer)
-	rootCmd.SetOut(buf)
-	rootCmd.SetErr(buf)
-
-	rootCmd.SetArgs([]string{"rm"})
-	err := rootCmd.Execute()
-	if err == nil {
-		t.Error("expected error when no task ID provided")
-	}
-}
-
-// TestListNoArgs verifies list takes no arguments.
-func TestListNoArgs(t *testing.T) {
-	buf := new(bytes.Buffer)
-	rootCmd.SetOut(buf)
-	rootCmd.SetErr(buf)
-
-	rootCmd.SetArgs([]string{"list", "extra-arg"})
-	err := rootCmd.Execute()
-	if err == nil {
-		t.Error("expected error when extra arguments provided to list")
+	if !found {
+		t.Error("command 'env' not found in root command")
 	}
 }
