@@ -42,21 +42,24 @@ func runAttach(cmd *cobra.Command, args []string) error {
 		if errors.Is(err, state.ErrAmbiguousPrefix) {
 			return fmt.Errorf("ambiguous environment ID %q: matches multiple environments", idPrefix)
 		}
+		if errors.Is(err, state.ErrInvalidPrefix) {
+			return fmt.Errorf("invalid environment ID %q: must contain only hexadecimal characters", idPrefix)
+		}
 		return fmt.Errorf("failed to get environment: %w", err)
 	}
 
 	// Check environment status
 	switch env.Status {
 	case state.StatusRemoved:
-		return fmt.Errorf("environment %q has been removed", state.ShortID(env.ID))
+		return fmt.Errorf("environment %q has been removed", idPrefix)
 	case state.StatusFailed:
-		return fmt.Errorf("environment %q is in failed state", state.ShortID(env.ID))
+		return fmt.Errorf("environment %q is in failed state", idPrefix)
 	case state.StatusProvisioning:
-		return fmt.Errorf("environment %q is still provisioning", state.ShortID(env.ID))
+		return fmt.Errorf("environment %q is still provisioning", idPrefix)
 	}
 
 	if env.BackendID == "" {
-		return fmt.Errorf("environment %q has no backend ID (may not be fully provisioned)", state.ShortID(env.ID))
+		return fmt.Errorf("environment %q has no backend ID (may not be fully provisioned)", idPrefix)
 	}
 
 	// Get backend - for MVP, always use worktree

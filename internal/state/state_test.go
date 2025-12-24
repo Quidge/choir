@@ -195,9 +195,23 @@ func TestCRUD(t *testing.T) {
 	})
 
 	t.Run("GetByPrefix not found", func(t *testing.T) {
-		_, err := db.GetEnvironmentByPrefix("xyz")
+		_, err := db.GetEnvironmentByPrefix("fff999")
 		if !errors.Is(err, ErrEnvironmentNotFound) {
-			t.Errorf("GetEnvironmentByPrefix(xyz) error = %v, want ErrEnvironmentNotFound", err)
+			t.Errorf("GetEnvironmentByPrefix(fff999) error = %v, want ErrEnvironmentNotFound", err)
+		}
+	})
+
+	t.Run("GetByPrefix invalid characters", func(t *testing.T) {
+		_, err := db.GetEnvironmentByPrefix("abc%")
+		if !errors.Is(err, ErrInvalidPrefix) {
+			t.Errorf("GetEnvironmentByPrefix(abc%%) error = %v, want ErrInvalidPrefix", err)
+		}
+	})
+
+	t.Run("GetByPrefix empty", func(t *testing.T) {
+		_, err := db.GetEnvironmentByPrefix("")
+		if !errors.Is(err, ErrInvalidPrefix) {
+			t.Errorf("GetEnvironmentByPrefix(\"\") error = %v, want ErrInvalidPrefix", err)
 		}
 	})
 

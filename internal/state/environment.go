@@ -55,8 +55,21 @@ var ErrEnvironmentNotFound = errors.New("environment not found")
 // ErrAmbiguousPrefix is returned when an ID prefix matches multiple environments.
 var ErrAmbiguousPrefix = errors.New("ambiguous environment ID prefix")
 
+// ErrInvalidPrefix is returned when an ID prefix contains non-hex characters.
+var ErrInvalidPrefix = errors.New("invalid ID prefix: must contain only hexadecimal characters")
+
 // ErrInvalidStatus is returned when an invalid status is provided.
 var ErrInvalidStatus = errors.New("invalid status")
+
+// isHexString returns true if s contains only hexadecimal characters.
+func isHexString(s string) bool {
+	for _, c := range s {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
+}
 
 // CreateEnvironment inserts a new environment into the database.
 func (db *DB) CreateEnvironment(env *Environment) error {
@@ -103,8 +116,13 @@ func (db *DB) GetEnvironment(id string) (*Environment, error) {
 }
 
 // GetEnvironmentByPrefix retrieves an environment by ID prefix.
-// Returns ErrEnvironmentNotFound if no match, ErrAmbiguousPrefix if multiple matches.
+// Returns ErrEnvironmentNotFound if no match, ErrAmbiguousPrefix if multiple matches,
+// or ErrInvalidPrefix if the prefix contains non-hex characters.
 func (db *DB) GetEnvironmentByPrefix(prefix string) (*Environment, error) {
+	if prefix == "" || !isHexString(prefix) {
+		return nil, ErrInvalidPrefix
+	}
+
 	rows, err := db.Query(`
 		SELECT id, backend, backend_id, repo_path, remote_url,
 		       branch_name, base_branch, created_at, status

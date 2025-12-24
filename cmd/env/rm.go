@@ -53,6 +53,9 @@ func runRm(cmd *cobra.Command, args []string) error {
 		if errors.Is(err, state.ErrAmbiguousPrefix) {
 			return fmt.Errorf("ambiguous environment ID %q: matches multiple environments", idPrefix)
 		}
+		if errors.Is(err, state.ErrInvalidPrefix) {
+			return fmt.Errorf("invalid environment ID %q: must contain only hexadecimal characters", idPrefix)
+		}
 		return fmt.Errorf("failed to get environment: %w", err)
 	}
 
