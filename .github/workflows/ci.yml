@@ -52,3 +52,24 @@ jobs:
         run: |
           find . -type f -name "*.sh" ! -path "./.git/*" -print0 | \
             xargs -0 shellcheck --severity=warning
+
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Check for goreleaser config changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            goreleaser:
+              - '.goreleaser.yaml'
+
+      - name: Validate GoReleaser config
+        if: steps.filter.outputs.goreleaser == 'true'
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: check
