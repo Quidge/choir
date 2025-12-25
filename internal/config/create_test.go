@@ -87,13 +87,13 @@ func TestNewCreateConfig(t *testing.T) {
 	}
 
 	t.Run("valid config", func(t *testing.T) {
-		cfg, err := NewCreateConfig(baseMerged, baseRepo, "task-123")
+		cfg, err := NewCreateConfig(baseMerged, baseRepo, "abc123def456abc123def456abc12345")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if cfg.TaskID != "task-123" {
-			t.Errorf("expected TaskID 'task-123', got %q", cfg.TaskID)
+		if cfg.ID != "abc123def456abc123def456abc12345" {
+			t.Errorf("expected ID 'abc123...', got %q", cfg.ID)
 		}
 		if cfg.Backend != "local" {
 			t.Errorf("expected Backend 'local', got %q", cfg.Backend)
@@ -124,10 +124,10 @@ func TestNewCreateConfig(t *testing.T) {
 		}
 	})
 
-	t.Run("empty taskID", func(t *testing.T) {
+	t.Run("empty ID", func(t *testing.T) {
 		_, err := NewCreateConfig(baseMerged, baseRepo, "")
 		if err == nil {
-			t.Error("expected error for empty taskID")
+			t.Error("expected error for empty ID")
 		}
 	})
 
@@ -136,7 +136,7 @@ func TestNewCreateConfig(t *testing.T) {
 			RemoteURL:  "git@github.com:user/myapp.git",
 			BaseBranch: "main",
 		}
-		_, err := NewCreateConfig(baseMerged, emptyRepo, "task-123")
+		_, err := NewCreateConfig(baseMerged, emptyRepo, "abc123def456abc123def456abc12345")
 		if err == nil {
 			t.Error("expected error for empty repository path")
 		}
@@ -147,7 +147,7 @@ func TestNewCreateConfig(t *testing.T) {
 		invalidMerged.Files = []FileMount{
 			{Source: "/home/user/.aws", Target: "relative/path"},
 		}
-		_, err := NewCreateConfig(invalidMerged, baseRepo, "task-123")
+		_, err := NewCreateConfig(invalidMerged, baseRepo, "abc123def456abc123def456abc12345")
 		if err == nil {
 			t.Error("expected error for invalid file mount target")
 		}
@@ -158,7 +158,7 @@ func TestNewCreateConfig(t *testing.T) {
 			Path:       "/home/user/projects/myapp",
 			BaseBranch: "main",
 		}
-		cfg, err := NewCreateConfig(baseMerged, repoNoRemote, "task-123")
+		cfg, err := NewCreateConfig(baseMerged, repoNoRemote, "abc123def456abc123def456abc12345")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -170,7 +170,7 @@ func TestNewCreateConfig(t *testing.T) {
 	t.Run("nil environment map", func(t *testing.T) {
 		noEnvMerged := baseMerged
 		noEnvMerged.Env = nil
-		cfg, err := NewCreateConfig(noEnvMerged, baseRepo, "task-123")
+		cfg, err := NewCreateConfig(noEnvMerged, baseRepo, "abc123def456abc123def456abc12345")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -182,7 +182,7 @@ func TestNewCreateConfig(t *testing.T) {
 	t.Run("empty environment map", func(t *testing.T) {
 		emptyEnvMerged := baseMerged
 		emptyEnvMerged.Env = map[string]string{}
-		cfg, err := NewCreateConfig(emptyEnvMerged, baseRepo, "task-123")
+		cfg, err := NewCreateConfig(emptyEnvMerged, baseRepo, "abc123def456abc123def456abc12345")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

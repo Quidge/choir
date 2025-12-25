@@ -17,11 +17,11 @@ func ValidateFileMounts(files []FileMount) error {
 	return nil
 }
 
-// NewCreateConfig builds a CreateConfig from a MergedConfig, repository info, and task ID.
+// NewCreateConfig builds a CreateConfig from a MergedConfig, repository info, and environment ID.
 // It performs final validation including target path checks.
-func NewCreateConfig(merged MergedConfig, repo RepositoryInfo, taskID string) (CreateConfig, error) {
-	if taskID == "" {
-		return CreateConfig{}, fmt.Errorf("taskID is required")
+func NewCreateConfig(merged MergedConfig, repo RepositoryInfo, id string) (CreateConfig, error) {
+	if id == "" {
+		return CreateConfig{}, fmt.Errorf("environment ID is required")
 	}
 
 	if repo.Path == "" {
@@ -34,7 +34,7 @@ func NewCreateConfig(merged MergedConfig, repo RepositoryInfo, taskID string) (C
 	}
 
 	return CreateConfig{
-		TaskID:        taskID,
+		ID:            id,
 		Backend:       merged.Backend,
 		BackendType:   merged.BackendType,
 		Resources:     merged.Resources,

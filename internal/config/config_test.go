@@ -100,8 +100,8 @@ func TestLoadProjectConfig(t *testing.T) {
 		if cfg.Version != 1 {
 			t.Errorf("expected version 1, got %d", cfg.Version)
 		}
-		if cfg.BranchPrefix != "agent/" {
-			t.Errorf("expected branch_prefix 'agent/', got %q", cfg.BranchPrefix)
+		if cfg.BranchPrefix != "env/" {
+			t.Errorf("expected branch_prefix 'env/', got %q", cfg.BranchPrefix)
 		}
 	})
 
@@ -329,8 +329,8 @@ func TestDefaultProjectConfig(t *testing.T) {
 	if cfg.Version != 1 {
 		t.Errorf("expected version 1, got %d", cfg.Version)
 	}
-	if cfg.BranchPrefix != "agent/" {
-		t.Errorf("expected branch_prefix 'agent/', got %q", cfg.BranchPrefix)
+	if cfg.BranchPrefix != "env/" {
+		t.Errorf("expected branch_prefix 'env/', got %q", cfg.BranchPrefix)
 	}
 }
 

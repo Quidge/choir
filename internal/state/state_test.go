@@ -66,13 +66,56 @@ func TestMigrations(t *testing.T) {
 		t.Errorf("SchemaVersion() = %d, want %d", version, expectedVersion)
 	}
 
-	// Verify agents table exists with expected columns
+	// Verify environments table exists with expected columns
 	_, err = db.Exec(`
-		INSERT INTO agents (task_id, backend, repo_path, branch_name, base_branch, created_at, status)
-		VALUES ('test', 'local', '/test', 'branch', 'main', '2024-01-01T00:00:00Z', 'running')
+		INSERT INTO environments (id, backend, repo_path, branch_name, base_branch, created_at, status)
+		VALUES ('abc123def456abc123def456abc12345', 'local', '/test', 'branch', 'main', '2024-01-01T00:00:00Z', 'ready')
 	`)
 	if err != nil {
-		t.Errorf("failed to insert into agents table: %v", err)
+		t.Errorf("failed to insert into environments table: %v", err)
+	}
+}
+
+func TestGenerateID(t *testing.T) {
+	id, err := GenerateID()
+	if err != nil {
+		t.Fatalf("GenerateID() failed: %v", err)
+	}
+
+	if len(id) != IDLength {
+		t.Errorf("len(GenerateID()) = %d, want %d", len(id), IDLength)
+	}
+
+	// Verify it's hex
+	for _, c := range id {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+			t.Errorf("GenerateID() contains non-hex character: %c", c)
+		}
+	}
+
+	// Verify uniqueness
+	id2, _ := GenerateID()
+	if id == id2 {
+		t.Error("GenerateID() returned same ID twice")
+	}
+}
+
+func TestShortID(t *testing.T) {
+	id := "abc123def456abc123def456abc12345"
+	short := ShortID(id)
+
+	if len(short) != ShortIDLength {
+		t.Errorf("len(ShortID()) = %d, want %d", len(short), ShortIDLength)
+	}
+
+	if short != "abc123def456" {
+		t.Errorf("ShortID() = %q, want %q", short, "abc123def456")
+	}
+
+	// Test with short input
+	shortInput := "abc"
+	if ShortID(shortInput) != shortInput {
+		t.Errorf("ShortID(%q) = %q, want %q", shortInput, ShortID(shortInput), shortInput)
 	}
 }
 
@@ -80,130 +123,195 @@ func TestCRUD(t *testing.T) {
 	db := openTestDB(t)
 
 	now := time.Now().Truncate(time.Second)
-	agent := &Agent{
-		TaskID:     "task-123",
+	env := &Environment{
+		ID:         "abc123def456abc123def456abc12345",
 		Backend:    "local",
-		BackendID:  "lima-abc",
+		BackendID:  "/path/to/worktree",
 		RepoPath:   "/home/user/project",
 		RemoteURL:  "git@github.com:user/project.git",
-		BranchName: "agent/feature-x",
+		BranchName: "env/abc123def456",
 		BaseBranch: "main",
 		CreatedAt:  now,
-		Status:     StatusRunning,
-		Prompt:     "Implement feature X",
-		Notes:      "Some notes",
+		Status:     StatusReady,
 	}
 
 	t.Run("Create", func(t *testing.T) {
-		err := db.CreateAgent(agent)
+		err := db.CreateEnvironment(env)
 		if err != nil {
-			t.Fatalf("CreateAgent() failed: %v", err)
+			t.Fatalf("CreateEnvironment() failed: %v", err)
 		}
 	})
 
 	t.Run("Get", func(t *testing.T) {
-		got, err := db.GetAgent("task-123")
+		got, err := db.GetEnvironment("abc123def456abc123def456abc12345")
 		if err != nil {
-			t.Fatalf("GetAgent() failed: %v", err)
+			t.Fatalf("GetEnvironment() failed: %v", err)
 		}
 
-		if got.TaskID != agent.TaskID {
-			t.Errorf("TaskID = %q, want %q", got.TaskID, agent.TaskID)
+		if got.ID != env.ID {
+			t.Errorf("ID = %q, want %q", got.ID, env.ID)
 		}
-		if got.Backend != agent.Backend {
-			t.Errorf("Backend = %q, want %q", got.Backend, agent.Backend)
+		if got.Backend != env.Backend {
+			t.Errorf("Backend = %q, want %q", got.Backend, env.Backend)
 		}
-		if got.BackendID != agent.BackendID {
-			t.Errorf("BackendID = %q, want %q", got.BackendID, agent.BackendID)
+		if got.BackendID != env.BackendID {
+			t.Errorf("BackendID = %q, want %q", got.BackendID, env.BackendID)
 		}
-		if got.RepoPath != agent.RepoPath {
-			t.Errorf("RepoPath = %q, want %q", got.RepoPath, agent.RepoPath)
+		if got.RepoPath != env.RepoPath {
+			t.Errorf("RepoPath = %q, want %q", got.RepoPath, env.RepoPath)
 		}
-		if got.RemoteURL != agent.RemoteURL {
-			t.Errorf("RemoteURL = %q, want %q", got.RemoteURL, agent.RemoteURL)
+		if got.RemoteURL != env.RemoteURL {
+			t.Errorf("RemoteURL = %q, want %q", got.RemoteURL, env.RemoteURL)
 		}
-		if got.BranchName != agent.BranchName {
-			t.Errorf("BranchName = %q, want %q", got.BranchName, agent.BranchName)
+		if got.BranchName != env.BranchName {
+			t.Errorf("BranchName = %q, want %q", got.BranchName, env.BranchName)
 		}
-		if got.BaseBranch != agent.BaseBranch {
-			t.Errorf("BaseBranch = %q, want %q", got.BaseBranch, agent.BaseBranch)
+		if got.BaseBranch != env.BaseBranch {
+			t.Errorf("BaseBranch = %q, want %q", got.BaseBranch, env.BaseBranch)
 		}
-		if !got.CreatedAt.Equal(agent.CreatedAt) {
-			t.Errorf("CreatedAt = %v, want %v", got.CreatedAt, agent.CreatedAt)
+		if !got.CreatedAt.Equal(env.CreatedAt) {
+			t.Errorf("CreatedAt = %v, want %v", got.CreatedAt, env.CreatedAt)
 		}
-		if got.Status != agent.Status {
-			t.Errorf("Status = %q, want %q", got.Status, agent.Status)
-		}
-		if got.Prompt != agent.Prompt {
-			t.Errorf("Prompt = %q, want %q", got.Prompt, agent.Prompt)
-		}
-		if got.Notes != agent.Notes {
-			t.Errorf("Notes = %q, want %q", got.Notes, agent.Notes)
+		if got.Status != env.Status {
+			t.Errorf("Status = %q, want %q", got.Status, env.Status)
 		}
 	})
 
 	t.Run("Get not found", func(t *testing.T) {
-		_, err := db.GetAgent("nonexistent")
-		if !errors.Is(err, ErrAgentNotFound) {
-			t.Errorf("GetAgent(nonexistent) error = %v, want ErrAgentNotFound", err)
+		_, err := db.GetEnvironment("nonexistent")
+		if !errors.Is(err, ErrEnvironmentNotFound) {
+			t.Errorf("GetEnvironment(nonexistent) error = %v, want ErrEnvironmentNotFound", err)
+		}
+	})
+
+	t.Run("GetByPrefix", func(t *testing.T) {
+		got, err := db.GetEnvironmentByPrefix("abc123")
+		if err != nil {
+			t.Fatalf("GetEnvironmentByPrefix() failed: %v", err)
+		}
+		if got.ID != env.ID {
+			t.Errorf("ID = %q, want %q", got.ID, env.ID)
+		}
+	})
+
+	t.Run("GetByPrefix not found", func(t *testing.T) {
+		_, err := db.GetEnvironmentByPrefix("fff999")
+		if !errors.Is(err, ErrEnvironmentNotFound) {
+			t.Errorf("GetEnvironmentByPrefix(fff999) error = %v, want ErrEnvironmentNotFound", err)
+		}
+	})
+
+	t.Run("GetByPrefix invalid characters", func(t *testing.T) {
+		_, err := db.GetEnvironmentByPrefix("abc%")
+		if !errors.Is(err, ErrInvalidPrefix) {
+			t.Errorf("GetEnvironmentByPrefix(abc%%) error = %v, want ErrInvalidPrefix", err)
+		}
+	})
+
+	t.Run("GetByPrefix empty", func(t *testing.T) {
+		_, err := db.GetEnvironmentByPrefix("")
+		if !errors.Is(err, ErrInvalidPrefix) {
+			t.Errorf("GetEnvironmentByPrefix(\"\") error = %v, want ErrInvalidPrefix", err)
 		}
 	})
 
 	t.Run("Update", func(t *testing.T) {
-		agent.Status = StatusStopped
-		agent.Notes = "Updated notes"
+		env.Status = StatusRemoved
 
-		err := db.UpdateAgent(agent)
+		err := db.UpdateEnvironment(env)
 		if err != nil {
-			t.Fatalf("UpdateAgent() failed: %v", err)
+			t.Fatalf("UpdateEnvironment() failed: %v", err)
 		}
 
-		got, err := db.GetAgent("task-123")
+		got, err := db.GetEnvironment("abc123def456abc123def456abc12345")
 		if err != nil {
-			t.Fatalf("GetAgent() after update failed: %v", err)
+			t.Fatalf("GetEnvironment() after update failed: %v", err)
 		}
 
-		if got.Status != StatusStopped {
-			t.Errorf("Status = %q, want %q", got.Status, StatusStopped)
-		}
-		if got.Notes != "Updated notes" {
-			t.Errorf("Notes = %q, want %q", got.Notes, "Updated notes")
+		if got.Status != StatusRemoved {
+			t.Errorf("Status = %q, want %q", got.Status, StatusRemoved)
 		}
 	})
 
 	t.Run("Update not found", func(t *testing.T) {
-		notFound := &Agent{
-			TaskID:     "nonexistent",
+		notFound := &Environment{
+			ID:         "nonexistent12345678901234567890",
 			Backend:    "local",
 			RepoPath:   "/test",
 			BranchName: "test",
 			BaseBranch: "main",
-			Status:     StatusRunning,
+			Status:     StatusReady,
 		}
-		err := db.UpdateAgent(notFound)
-		if !errors.Is(err, ErrAgentNotFound) {
-			t.Errorf("UpdateAgent(nonexistent) error = %v, want ErrAgentNotFound", err)
+		err := db.UpdateEnvironment(notFound)
+		if !errors.Is(err, ErrEnvironmentNotFound) {
+			t.Errorf("UpdateEnvironment(nonexistent) error = %v, want ErrEnvironmentNotFound", err)
 		}
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		err := db.DeleteAgent("task-123")
+		err := db.DeleteEnvironment("abc123def456abc123def456abc12345")
 		if err != nil {
-			t.Fatalf("DeleteAgent() failed: %v", err)
+			t.Fatalf("DeleteEnvironment() failed: %v", err)
 		}
 
-		_, err = db.GetAgent("task-123")
-		if !errors.Is(err, ErrAgentNotFound) {
-			t.Errorf("GetAgent() after delete error = %v, want ErrAgentNotFound", err)
+		_, err = db.GetEnvironment("abc123def456abc123def456abc12345")
+		if !errors.Is(err, ErrEnvironmentNotFound) {
+			t.Errorf("GetEnvironment() after delete error = %v, want ErrEnvironmentNotFound", err)
 		}
 	})
 
 	t.Run("Delete not found", func(t *testing.T) {
-		err := db.DeleteAgent("nonexistent")
-		if !errors.Is(err, ErrAgentNotFound) {
-			t.Errorf("DeleteAgent(nonexistent) error = %v, want ErrAgentNotFound", err)
+		err := db.DeleteEnvironment("nonexistent")
+		if !errors.Is(err, ErrEnvironmentNotFound) {
+			t.Errorf("DeleteEnvironment(nonexistent) error = %v, want ErrEnvironmentNotFound", err)
 		}
 	})
+}
+
+func TestGetByPrefixAmbiguous(t *testing.T) {
+	db := openTestDB(t)
+
+	// Create two environments with similar prefixes
+	env1 := &Environment{
+		ID:         "abc123def456abc123def456abc12345",
+		Backend:    "local",
+		RepoPath:   "/test",
+		BranchName: "env/abc123def456",
+		BaseBranch: "main",
+		CreatedAt:  time.Now(),
+		Status:     StatusReady,
+	}
+	env2 := &Environment{
+		ID:         "abc123xyz789abc123xyz789abc12345",
+		Backend:    "local",
+		RepoPath:   "/test",
+		BranchName: "env/abc123xyz789",
+		BaseBranch: "main",
+		CreatedAt:  time.Now(),
+		Status:     StatusReady,
+	}
+
+	if err := db.CreateEnvironment(env1); err != nil {
+		t.Fatalf("CreateEnvironment() failed: %v", err)
+	}
+	if err := db.CreateEnvironment(env2); err != nil {
+		t.Fatalf("CreateEnvironment() failed: %v", err)
+	}
+
+	// Should fail with ambiguous prefix
+	_, err := db.GetEnvironmentByPrefix("abc123")
+	if !errors.Is(err, ErrAmbiguousPrefix) {
+		t.Errorf("GetEnvironmentByPrefix(abc123) error = %v, want ErrAmbiguousPrefix", err)
+	}
+
+	// Should succeed with unique prefix
+	got, err := db.GetEnvironmentByPrefix("abc123def")
+	if err != nil {
+		t.Fatalf("GetEnvironmentByPrefix(abc123def) failed: %v", err)
+	}
+	if got.ID != env1.ID {
+		t.Errorf("ID = %q, want %q", got.ID, env1.ID)
+	}
 }
 
 func TestStatusValidation(t *testing.T) {
@@ -224,8 +332,8 @@ func TestStatusValidation(t *testing.T) {
 	})
 
 	t.Run("create with invalid status", func(t *testing.T) {
-		agent := &Agent{
-			TaskID:     "test",
+		env := &Environment{
+			ID:         "test123456789012345678901234567",
 			Backend:    "local",
 			RepoPath:   "/test",
 			BranchName: "test",
@@ -234,32 +342,32 @@ func TestStatusValidation(t *testing.T) {
 			Status:     "invalid",
 		}
 
-		err := db.CreateAgent(agent)
+		err := db.CreateEnvironment(env)
 		if !errors.Is(err, ErrInvalidStatus) {
-			t.Errorf("CreateAgent() with invalid status error = %v, want ErrInvalidStatus", err)
+			t.Errorf("CreateEnvironment() with invalid status error = %v, want ErrInvalidStatus", err)
 		}
 	})
 
 	t.Run("update with invalid status", func(t *testing.T) {
-		// First create a valid agent
-		agent := &Agent{
-			TaskID:     "test-status",
+		// First create a valid environment
+		env := &Environment{
+			ID:         "status1234567890123456789012345",
 			Backend:    "local",
 			RepoPath:   "/test",
 			BranchName: "test",
 			BaseBranch: "main",
 			CreatedAt:  time.Now(),
-			Status:     StatusRunning,
+			Status:     StatusReady,
 		}
-		if err := db.CreateAgent(agent); err != nil {
-			t.Fatalf("CreateAgent() failed: %v", err)
+		if err := db.CreateEnvironment(env); err != nil {
+			t.Fatalf("CreateEnvironment() failed: %v", err)
 		}
 
 		// Try to update with invalid status
-		agent.Status = "invalid"
-		err := db.UpdateAgent(agent)
+		env.Status = "invalid"
+		err := db.UpdateEnvironment(env)
 		if !errors.Is(err, ErrInvalidStatus) {
-			t.Errorf("UpdateAgent() with invalid status error = %v, want ErrInvalidStatus", err)
+			t.Errorf("UpdateEnvironment() with invalid status error = %v, want ErrInvalidStatus", err)
 		}
 	})
 }
@@ -267,9 +375,9 @@ func TestStatusValidation(t *testing.T) {
 func TestOptionalFields(t *testing.T) {
 	db := openTestDB(t)
 
-	// Create agent with minimal fields (no optional fields)
-	agent := &Agent{
-		TaskID:     "minimal",
+	// Create environment with minimal fields (no optional fields)
+	env := &Environment{
+		ID:         "minimal123456789012345678901234",
 		Backend:    "local",
 		RepoPath:   "/test",
 		BranchName: "test",
@@ -278,14 +386,14 @@ func TestOptionalFields(t *testing.T) {
 		Status:     StatusProvisioning,
 	}
 
-	err := db.CreateAgent(agent)
+	err := db.CreateEnvironment(env)
 	if err != nil {
-		t.Fatalf("CreateAgent() failed: %v", err)
+		t.Fatalf("CreateEnvironment() failed: %v", err)
 	}
 
-	got, err := db.GetAgent("minimal")
+	got, err := db.GetEnvironment("minimal123456789012345678901234")
 	if err != nil {
-		t.Fatalf("GetAgent() failed: %v", err)
+		t.Fatalf("GetEnvironment() failed: %v", err)
 	}
 
 	// Optional fields should be empty strings
@@ -295,178 +403,172 @@ func TestOptionalFields(t *testing.T) {
 	if got.RemoteURL != "" {
 		t.Errorf("RemoteURL = %q, want empty", got.RemoteURL)
 	}
-	if got.Prompt != "" {
-		t.Errorf("Prompt = %q, want empty", got.Prompt)
-	}
-	if got.Notes != "" {
-		t.Errorf("Notes = %q, want empty", got.Notes)
-	}
 }
 
-func TestListAgents(t *testing.T) {
+func TestListEnvironments(t *testing.T) {
 	db := openTestDB(t)
 
-	// Create test agents
-	agents := []*Agent{
+	// Create test environments
+	envs := []*Environment{
 		{
-			TaskID:     "task-1",
+			ID:         "env1abc123456789012345678901234",
 			Backend:    "local",
 			RepoPath:   "/project-a",
-			BranchName: "agent/1",
+			BranchName: "env/1",
 			BaseBranch: "main",
 			CreatedAt:  time.Now().Add(-3 * time.Hour),
-			Status:     StatusRunning,
+			Status:     StatusReady,
 		},
 		{
-			TaskID:     "task-2",
+			ID:         "env2abc123456789012345678901234",
 			Backend:    "local",
 			RepoPath:   "/project-a",
-			BranchName: "agent/2",
+			BranchName: "env/2",
 			BaseBranch: "main",
 			CreatedAt:  time.Now().Add(-2 * time.Hour),
-			Status:     StatusStopped,
+			Status:     StatusProvisioning,
 		},
 		{
-			TaskID:     "task-3",
+			ID:         "env3abc123456789012345678901234",
 			Backend:    "cloud",
 			RepoPath:   "/project-b",
-			BranchName: "agent/3",
+			BranchName: "env/3",
 			BaseBranch: "main",
 			CreatedAt:  time.Now().Add(-1 * time.Hour),
-			Status:     StatusRunning,
+			Status:     StatusReady,
 		},
 		{
-			TaskID:     "task-4",
+			ID:         "env4abc123456789012345678901234",
 			Backend:    "cloud",
 			RepoPath:   "/project-b",
-			BranchName: "agent/4",
+			BranchName: "env/4",
 			BaseBranch: "main",
 			CreatedAt:  time.Now(),
 			Status:     StatusFailed,
 		},
 	}
 
-	for _, a := range agents {
-		if err := db.CreateAgent(a); err != nil {
-			t.Fatalf("CreateAgent(%s) failed: %v", a.TaskID, err)
+	for _, e := range envs {
+		if err := db.CreateEnvironment(e); err != nil {
+			t.Fatalf("CreateEnvironment(%s) failed: %v", e.ID, err)
 		}
 	}
 
 	t.Run("list all", func(t *testing.T) {
-		got, err := db.ListAgents(ListOptions{})
+		got, err := db.ListEnvironments(ListOptions{})
 		if err != nil {
-			t.Fatalf("ListAgents() failed: %v", err)
+			t.Fatalf("ListEnvironments() failed: %v", err)
 		}
 
 		if len(got) != 4 {
-			t.Errorf("len(ListAgents()) = %d, want 4", len(got))
+			t.Errorf("len(ListEnvironments()) = %d, want 4", len(got))
 		}
 
 		// Should be ordered by created_at DESC (newest first)
-		if got[0].TaskID != "task-4" {
-			t.Errorf("first agent = %q, want task-4", got[0].TaskID)
+		if got[0].ID != "env4abc123456789012345678901234" {
+			t.Errorf("first environment = %q, want env4...", got[0].ID)
 		}
 	})
 
 	t.Run("filter by repo_path", func(t *testing.T) {
-		got, err := db.ListAgents(ListOptions{RepoPath: "/project-a"})
+		got, err := db.ListEnvironments(ListOptions{RepoPath: "/project-a"})
 		if err != nil {
-			t.Fatalf("ListAgents() failed: %v", err)
+			t.Fatalf("ListEnvironments() failed: %v", err)
 		}
 
 		if len(got) != 2 {
-			t.Errorf("len(ListAgents(repo=/project-a)) = %d, want 2", len(got))
+			t.Errorf("len(ListEnvironments(repo=/project-a)) = %d, want 2", len(got))
 		}
 
-		for _, a := range got {
-			if a.RepoPath != "/project-a" {
-				t.Errorf("agent %s has RepoPath = %q, want /project-a", a.TaskID, a.RepoPath)
+		for _, e := range got {
+			if e.RepoPath != "/project-a" {
+				t.Errorf("environment %s has RepoPath = %q, want /project-a", e.ID, e.RepoPath)
 			}
 		}
 	})
 
 	t.Run("filter by backend", func(t *testing.T) {
-		got, err := db.ListAgents(ListOptions{Backend: "cloud"})
+		got, err := db.ListEnvironments(ListOptions{Backend: "cloud"})
 		if err != nil {
-			t.Fatalf("ListAgents() failed: %v", err)
+			t.Fatalf("ListEnvironments() failed: %v", err)
 		}
 
 		if len(got) != 2 {
-			t.Errorf("len(ListAgents(backend=cloud)) = %d, want 2", len(got))
+			t.Errorf("len(ListEnvironments(backend=cloud)) = %d, want 2", len(got))
 		}
 
-		for _, a := range got {
-			if a.Backend != "cloud" {
-				t.Errorf("agent %s has Backend = %q, want cloud", a.TaskID, a.Backend)
+		for _, e := range got {
+			if e.Backend != "cloud" {
+				t.Errorf("environment %s has Backend = %q, want cloud", e.ID, e.Backend)
 			}
 		}
 	})
 
 	t.Run("filter by single status", func(t *testing.T) {
-		got, err := db.ListAgents(ListOptions{Statuses: []Status{StatusRunning}})
+		got, err := db.ListEnvironments(ListOptions{Statuses: []EnvironmentStatus{StatusReady}})
 		if err != nil {
-			t.Fatalf("ListAgents() failed: %v", err)
+			t.Fatalf("ListEnvironments() failed: %v", err)
 		}
 
 		if len(got) != 2 {
-			t.Errorf("len(ListAgents(status=running)) = %d, want 2", len(got))
+			t.Errorf("len(ListEnvironments(status=ready)) = %d, want 2", len(got))
 		}
 
-		for _, a := range got {
-			if a.Status != StatusRunning {
-				t.Errorf("agent %s has Status = %q, want running", a.TaskID, a.Status)
+		for _, e := range got {
+			if e.Status != StatusReady {
+				t.Errorf("environment %s has Status = %q, want ready", e.ID, e.Status)
 			}
 		}
 	})
 
 	t.Run("filter by multiple statuses", func(t *testing.T) {
-		got, err := db.ListAgents(ListOptions{Statuses: []Status{StatusStopped, StatusFailed}})
+		got, err := db.ListEnvironments(ListOptions{Statuses: []EnvironmentStatus{StatusProvisioning, StatusFailed}})
 		if err != nil {
-			t.Fatalf("ListAgents() failed: %v", err)
+			t.Fatalf("ListEnvironments() failed: %v", err)
 		}
 
 		if len(got) != 2 {
-			t.Errorf("len(ListAgents(status=stopped,failed)) = %d, want 2", len(got))
+			t.Errorf("len(ListEnvironments(status=provisioning,failed)) = %d, want 2", len(got))
 		}
 	})
 
 	t.Run("combined filters", func(t *testing.T) {
-		got, err := db.ListAgents(ListOptions{
+		got, err := db.ListEnvironments(ListOptions{
 			Backend:  "local",
-			Statuses: []Status{StatusRunning},
+			Statuses: []EnvironmentStatus{StatusReady},
 		})
 		if err != nil {
-			t.Fatalf("ListAgents() failed: %v", err)
+			t.Fatalf("ListEnvironments() failed: %v", err)
 		}
 
 		if len(got) != 1 {
-			t.Errorf("len(ListAgents(backend=local, status=running)) = %d, want 1", len(got))
+			t.Errorf("len(ListEnvironments(backend=local, status=ready)) = %d, want 1", len(got))
 		}
 
-		if len(got) > 0 && got[0].TaskID != "task-1" {
-			t.Errorf("agent = %q, want task-1", got[0].TaskID)
+		if len(got) > 0 && got[0].ID != "env1abc123456789012345678901234" {
+			t.Errorf("environment = %q, want env1...", got[0].ID)
 		}
 	})
 
 	t.Run("no matches", func(t *testing.T) {
-		got, err := db.ListAgents(ListOptions{RepoPath: "/nonexistent"})
+		got, err := db.ListEnvironments(ListOptions{RepoPath: "/nonexistent"})
 		if err != nil {
-			t.Fatalf("ListAgents() failed: %v", err)
+			t.Fatalf("ListEnvironments() failed: %v", err)
 		}
 
 		if len(got) != 0 {
-			t.Errorf("len(ListAgents(repo=/nonexistent)) = %d, want 0", len(got))
+			t.Errorf("len(ListEnvironments(repo=/nonexistent)) = %d, want 0", len(got))
 		}
 	})
 }
 
-func TestCountAgents(t *testing.T) {
+func TestCountEnvironments(t *testing.T) {
 	db := openTestDB(t)
 
-	// Create test agents
-	for i, status := range []Status{StatusRunning, StatusRunning, StatusStopped} {
-		agent := &Agent{
-			TaskID:     string(rune('a' + i)),
+	// Create test environments
+	for i, status := range []EnvironmentStatus{StatusReady, StatusReady, StatusProvisioning} {
+		env := &Environment{
+			ID:         string(rune('a'+i)) + "bc123456789012345678901234567",
 			Backend:    "local",
 			RepoPath:   "/test",
 			BranchName: "test",
@@ -474,28 +576,28 @@ func TestCountAgents(t *testing.T) {
 			CreatedAt:  time.Now(),
 			Status:     status,
 		}
-		if err := db.CreateAgent(agent); err != nil {
-			t.Fatalf("CreateAgent() failed: %v", err)
+		if err := db.CreateEnvironment(env); err != nil {
+			t.Fatalf("CreateEnvironment() failed: %v", err)
 		}
 	}
 
 	t.Run("count all", func(t *testing.T) {
-		count, err := db.CountAgents(ListOptions{})
+		count, err := db.CountEnvironments(ListOptions{})
 		if err != nil {
-			t.Fatalf("CountAgents() failed: %v", err)
+			t.Fatalf("CountEnvironments() failed: %v", err)
 		}
 		if count != 3 {
-			t.Errorf("CountAgents() = %d, want 3", count)
+			t.Errorf("CountEnvironments() = %d, want 3", count)
 		}
 	})
 
 	t.Run("count with filter", func(t *testing.T) {
-		count, err := db.CountAgents(ListOptions{Statuses: []Status{StatusRunning}})
+		count, err := db.CountEnvironments(ListOptions{Statuses: []EnvironmentStatus{StatusReady}})
 		if err != nil {
-			t.Fatalf("CountAgents() failed: %v", err)
+			t.Fatalf("CountEnvironments() failed: %v", err)
 		}
 		if count != 2 {
-			t.Errorf("CountAgents(status=running) = %d, want 2", count)
+			t.Errorf("CountEnvironments(status=ready) = %d, want 2", count)
 		}
 	})
 }
@@ -503,18 +605,18 @@ func TestCountAgents(t *testing.T) {
 func TestConcurrentReads(t *testing.T) {
 	db := openTestDB(t)
 
-	// Create a test agent
-	agent := &Agent{
-		TaskID:     "concurrent-test",
+	// Create a test environment
+	env := &Environment{
+		ID:         "concurrent12345678901234567890",
 		Backend:    "local",
 		RepoPath:   "/test",
 		BranchName: "test",
 		BaseBranch: "main",
 		CreatedAt:  time.Now(),
-		Status:     StatusRunning,
+		Status:     StatusReady,
 	}
-	if err := db.CreateAgent(agent); err != nil {
-		t.Fatalf("CreateAgent() failed: %v", err)
+	if err := db.CreateEnvironment(env); err != nil {
+		t.Fatalf("CreateEnvironment() failed: %v", err)
 	}
 
 	// Perform concurrent reads, collecting errors via channel
@@ -523,7 +625,7 @@ func TestConcurrentReads(t *testing.T) {
 	errs := make(chan error, numGoroutines)
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
-			_, err := db.GetAgent("concurrent-test")
+			_, err := db.GetEnvironment("concurrent12345678901234567890")
 			errs <- err
 		}()
 	}
@@ -531,7 +633,7 @@ func TestConcurrentReads(t *testing.T) {
 	// Collect results and check for errors
 	for i := 0; i < numGoroutines; i++ {
 		if err := <-errs; err != nil {
-			t.Errorf("concurrent GetAgent() failed: %v", err)
+			t.Errorf("concurrent GetEnvironment() failed: %v", err)
 		}
 	}
 }

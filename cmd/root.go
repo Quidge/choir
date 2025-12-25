@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Quidge/choir/cmd/env"
 	"github.com/spf13/cobra"
 )
 
@@ -12,17 +13,16 @@ var (
 	Version = "dev"
 
 	// Global flags
-	backendFlag string
-	verbose     bool
+	verbose bool
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "choir",
-	Short: "Manage isolated VM environments for AI agents",
-	Long: `Choir manages isolated development environments ("agents") for running
-AI coding assistants in parallel. Each agent operates in its own VM with
-full filesystem and network isolation, enabling multiple concurrent
-workstreams on the same codebase without conflicts.`,
+	Short: "Manage isolated environments for development work",
+	Long: `Choir manages isolated development environments for running
+AI coding assistants in parallel. Each environment operates in its own
+workspace with full isolation, enabling multiple concurrent workstreams
+on the same codebase without conflicts.`,
 	Version: Version,
 }
 
@@ -34,6 +34,6 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&backendFlag, "backend", "", "override default backend")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose output")
+	rootCmd.AddCommand(env.Cmd)
 }
