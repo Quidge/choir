@@ -42,5 +42,8 @@
       "Skill(git-commit-and-pull-request-message)",
       "Skill(github-issue-workflow)"
     ]
+  },
+  "enabledPlugins": {
+    "gopls-lsp@claude-plugins-official": true
   }
 }
