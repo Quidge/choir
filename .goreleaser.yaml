@@ -22,15 +22,21 @@ archives:
 checksum:
   name_template: "checksums.txt"
 
-brews:
+homebrew_casks:
   - repository:
       owner: Quidge
       name: homebrew-choir
       token: "{{ .Env.HOMEBREW_TAP_REPO_GH_PAT }}"
-    directory: Formula
+    directory: Casks
     homepage: "https://github.com/Quidge/choir"
     description: "Create isolated environments for AI agents to execute autonomously"
     license: "MIT"
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/choir"]
+          end
 
 release:
   github:
