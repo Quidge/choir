@@ -2,16 +2,16 @@ package config
 
 import (
 	"fmt"
-
-	"github.com/Quidge/choir/internal/pathutil"
 )
 
-// ValidateFileMounts validates that all file mount target paths are absolute.
+// ValidateFileMounts validates file mounts.
 // Source paths are expected to be already expanded by ExpandFileMounts.
+// Target paths can be absolute or relative (relative paths are resolved
+// by backends relative to the workspace root).
 func ValidateFileMounts(files []FileMount) error {
 	for i, f := range files {
-		if err := pathutil.ValidateAbsolute(f.Target); err != nil {
-			return fmt.Errorf("file mount %d target: %w", i, err)
+		if f.Target == "" {
+			return fmt.Errorf("file mount %d: target path is required", i)
 		}
 	}
 	return nil

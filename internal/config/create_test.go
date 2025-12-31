@@ -24,11 +24,11 @@ func TestValidateFileMounts(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "relative target path",
+			name: "relative target path is allowed",
 			files: []FileMount{
 				{Source: "/home/user/.aws", Target: "home/ubuntu/.aws"},
 			},
-			wantErr: true,
+			wantErr: false,
 		},
 		{
 			name: "empty target path",
@@ -38,12 +38,12 @@ func TestValidateFileMounts(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "mixed valid and invalid",
+			name: "mixed absolute and relative targets",
 			files: []FileMount{
 				{Source: "/home/user/.aws", Target: "/home/ubuntu/.aws"},
 				{Source: "/tmp/config", Target: "relative/path"},
 			},
-			wantErr: true,
+			wantErr: false,
 		},
 	}
 
@@ -142,14 +142,28 @@ func TestNewCreateConfig(t *testing.T) {
 		}
 	})
 
-	t.Run("invalid file mount target", func(t *testing.T) {
+	t.Run("relative file mount target is allowed", func(t *testing.T) {
+		validMerged := baseMerged
+		validMerged.Files = []FileMount{
+			{Source: "/home/user/.aws", Target: "relative/path"},
+		}
+		cfg, err := NewCreateConfig(validMerged, baseRepo, "abc123def456abc123def456abc12345")
+		if err != nil {
+			t.Fatalf("unexpected error for relative target path: %v", err)
+		}
+		if cfg.Files[0].Target != "relative/path" {
+			t.Errorf("expected target %q, got %q", "relative/path", cfg.Files[0].Target)
+		}
+	})
+
+	t.Run("empty file mount target", func(t *testing.T) {
 		invalidMerged := baseMerged
 		invalidMerged.Files = []FileMount{
-			{Source: "/home/user/.aws", Target: "relative/path"},
+			{Source: "/home/user/.aws", Target: ""},
 		}
 		_, err := NewCreateConfig(invalidMerged, baseRepo, "abc123def456abc123def456abc12345")
 		if err == nil {
-			t.Error("expected error for invalid file mount target")
+			t.Error("expected error for empty file mount target")
 		}
 	})
 
