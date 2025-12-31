@@ -22,8 +22,9 @@ func TestWorktreeConformance(t *testing.T) {
 	}
 
 	suite := &ConformanceSuite{
-		Backend:   be,
-		RepoSetup: SetupGitRepo,
+		Backend:     be,
+		BackendType: "worktree",
+		RepoSetup:   SetupGitRepo,
 	}
 	suite.Run(t)
 }

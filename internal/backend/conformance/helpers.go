@@ -18,6 +18,18 @@ import (
 	"github.com/Quidge/choir/internal/config"
 )
 
+// DefaultTimeout is the default timeout for test operations.
+const DefaultTimeout = 30 * time.Second
+
+// TestEnvConfig configures a test environment.
+type TestEnvConfig struct {
+	// BackendType is the type of backend (e.g., "worktree", "lima").
+	BackendType string
+
+	// Timeout for test operations. Defaults to DefaultTimeout.
+	Timeout time.Duration
+}
+
 // TestEnv encapsulates a complete test environment with assertion helpers.
 // It provides a convenient API for conformance tests to verify backend behavior.
 type TestEnv struct {
@@ -31,16 +43,23 @@ type TestEnv struct {
 
 // NewTestEnv creates a fully provisioned test environment.
 // The environment is automatically cleaned up when the test completes.
-func NewTestEnv(t *testing.T, be backend.Backend, repoPath string) *TestEnv {
+func NewTestEnv(t *testing.T, be backend.Backend, repoPath string, cfg TestEnvConfig) *TestEnv {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+
+	timeout := cfg.Timeout
+	if timeout == 0 {
+		timeout = DefaultTimeout
+	}
+
+	// Use t.Context() for proper test cancellation propagation (Go 1.21+)
+	ctx, cancel := context.WithTimeout(t.Context(), timeout)
 
 	envID := generateTestID(t)
 
-	cfg := &config.CreateConfig{
+	createCfg := &config.CreateConfig{
 		ID:           envID,
 		Backend:      "test",
-		BackendType:  "worktree",
+		BackendType:  cfg.BackendType,
 		BranchPrefix: "test/",
 		Repository: config.RepositoryInfo{
 			Path:       repoPath,
@@ -48,7 +67,7 @@ func NewTestEnv(t *testing.T, be backend.Backend, repoPath string) *TestEnv {
 		},
 	}
 
-	backendID, err := be.Create(ctx, cfg)
+	backendID, err := be.Create(ctx, createCfg)
 	if err != nil {
 		cancel()
 		t.Fatalf("failed to create backend: %v", err)

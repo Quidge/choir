@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Quidge/choir/internal/backend"
 	"github.com/Quidge/choir/internal/config"
@@ -17,9 +18,23 @@ type ConformanceSuite struct {
 	// Backend under test.
 	Backend backend.Backend
 
+	// BackendType is the type of backend (e.g., "worktree", "lima").
+	BackendType string
+
+	// Timeout for test operations. Uses DefaultTimeout if zero.
+	Timeout time.Duration
+
 	// RepoSetup is called to create a git repo for each test.
 	// Should use t.Cleanup() for automatic cleanup.
 	RepoSetup func(t *testing.T) string
+}
+
+// envConfig returns the TestEnvConfig for this suite.
+func (s *ConformanceSuite) envConfig() TestEnvConfig {
+	return TestEnvConfig{
+		BackendType: s.BackendType,
+		Timeout:     s.Timeout,
+	}
 }
 
 // Run executes all conformance tests.
@@ -34,7 +49,7 @@ func (s *ConformanceSuite) Run(t *testing.T) {
 func (s *ConformanceSuite) testLifecycle(t *testing.T) {
 	t.Run("CreateAndDestroy", func(t *testing.T) {
 		repoPath := s.RepoSetup(t)
-		env := NewTestEnv(t, s.Backend, repoPath)
+		env := NewTestEnv(t, s.Backend, repoPath, s.envConfig())
 
 		// Verify it exists and is running
 		status, err := s.Backend.Status(env.Ctx, env.BackendID)
@@ -83,7 +98,7 @@ func (s *ConformanceSuite) testFileMounts(t *testing.T) {
 		// THIS TEST WOULD HAVE CAUGHT THE BUG in issue #46
 		// Relative target paths should work - the backend handles them
 		repoPath := s.RepoSetup(t)
-		env := NewTestEnv(t, s.Backend, repoPath)
+		env := NewTestEnv(t, s.Backend, repoPath, s.envConfig())
 
 		fixtures := CreateTestFixtures(t, t.TempDir())
 		err := env.RunSetup(&backend.SetupConfig{
@@ -102,7 +117,7 @@ func (s *ConformanceSuite) testFileMounts(t *testing.T) {
 
 	t.Run("AbsoluteTargetPath", func(t *testing.T) {
 		repoPath := s.RepoSetup(t)
-		env := NewTestEnv(t, s.Backend, repoPath)
+		env := NewTestEnv(t, s.Backend, repoPath, s.envConfig())
 
 		fixtures := CreateTestFixtures(t, t.TempDir())
 		// Use an absolute path inside the workspace
@@ -123,7 +138,7 @@ func (s *ConformanceSuite) testFileMounts(t *testing.T) {
 
 	t.Run("ReadOnlyMount", func(t *testing.T) {
 		repoPath := s.RepoSetup(t)
-		env := NewTestEnv(t, s.Backend, repoPath)
+		env := NewTestEnv(t, s.Backend, repoPath, s.envConfig())
 
 		fixtures := CreateTestFixtures(t, t.TempDir())
 		err := env.RunSetup(&backend.SetupConfig{
@@ -142,7 +157,7 @@ func (s *ConformanceSuite) testFileMounts(t *testing.T) {
 
 	t.Run("WritableMount", func(t *testing.T) {
 		repoPath := s.RepoSetup(t)
-		env := NewTestEnv(t, s.Backend, repoPath)
+		env := NewTestEnv(t, s.Backend, repoPath, s.envConfig())
 
 		fixtures := CreateTestFixtures(t, t.TempDir())
 		err := env.RunSetup(&backend.SetupConfig{
@@ -168,7 +183,7 @@ func (s *ConformanceSuite) testFileMounts(t *testing.T) {
 
 	t.Run("DirectoryMount", func(t *testing.T) {
 		repoPath := s.RepoSetup(t)
-		env := NewTestEnv(t, s.Backend, repoPath)
+		env := NewTestEnv(t, s.Backend, repoPath, s.envConfig())
 
 		fixtures := CreateTestFixtures(t, t.TempDir())
 		err := env.RunSetup(&backend.SetupConfig{
@@ -190,7 +205,7 @@ func (s *ConformanceSuite) testFileMounts(t *testing.T) {
 	t.Run("NestedTargetPath", func(t *testing.T) {
 		// Target in non-existent directory should create parent dirs
 		repoPath := s.RepoSetup(t)
-		env := NewTestEnv(t, s.Backend, repoPath)
+		env := NewTestEnv(t, s.Backend, repoPath, s.envConfig())
 
 		fixtures := CreateTestFixtures(t, t.TempDir())
 		err := env.RunSetup(&backend.SetupConfig{
@@ -208,7 +223,7 @@ func (s *ConformanceSuite) testFileMounts(t *testing.T) {
 
 	t.Run("SourceNotFound", func(t *testing.T) {
 		repoPath := s.RepoSetup(t)
-		env := NewTestEnv(t, s.Backend, repoPath)
+		env := NewTestEnv(t, s.Backend, repoPath, s.envConfig())
 
 		err := env.RunSetup(&backend.SetupConfig{
 			Files: []config.FileMount{
@@ -225,7 +240,7 @@ func (s *ConformanceSuite) testFileMounts(t *testing.T) {
 func (s *ConformanceSuite) testEnvironment(t *testing.T) {
 	t.Run("BasicEnvVar", func(t *testing.T) {
 		repoPath := s.RepoSetup(t)
-		env := NewTestEnv(t, s.Backend, repoPath)
+		env := NewTestEnv(t, s.Backend, repoPath, s.envConfig())
 
 		err := env.RunSetup(&backend.SetupConfig{
 			Environment: map[string]string{
@@ -241,7 +256,7 @@ func (s *ConformanceSuite) testEnvironment(t *testing.T) {
 
 	t.Run("SpecialCharacters", func(t *testing.T) {
 		repoPath := s.RepoSetup(t)
-		env := NewTestEnv(t, s.Backend, repoPath)
+		env := NewTestEnv(t, s.Backend, repoPath, s.envConfig())
 
 		err := env.RunSetup(&backend.SetupConfig{
 			Environment: map[string]string{
@@ -262,7 +277,7 @@ func (s *ConformanceSuite) testEnvironment(t *testing.T) {
 	t.Run("EnvVarPersistence", func(t *testing.T) {
 		// Env vars should persist across Exec calls
 		repoPath := s.RepoSetup(t)
-		env := NewTestEnv(t, s.Backend, repoPath)
+		env := NewTestEnv(t, s.Backend, repoPath, s.envConfig())
 
 		err := env.RunSetup(&backend.SetupConfig{
 			Environment: map[string]string{
@@ -281,7 +296,7 @@ func (s *ConformanceSuite) testEnvironment(t *testing.T) {
 
 	t.Run("EmptyValue", func(t *testing.T) {
 		repoPath := s.RepoSetup(t)
-		env := NewTestEnv(t, s.Backend, repoPath)
+		env := NewTestEnv(t, s.Backend, repoPath, s.envConfig())
 
 		err := env.RunSetup(&backend.SetupConfig{
 			Environment: map[string]string{
@@ -303,7 +318,7 @@ func (s *ConformanceSuite) testEnvironment(t *testing.T) {
 	t.Run("EmptyEnvironment", func(t *testing.T) {
 		// No environment variables should not create .choir-env file
 		repoPath := s.RepoSetup(t)
-		env := NewTestEnv(t, s.Backend, repoPath)
+		env := NewTestEnv(t, s.Backend, repoPath, s.envConfig())
 
 		err := env.RunSetup(&backend.SetupConfig{
 			Environment: map[string]string{},
@@ -321,7 +336,7 @@ func (s *ConformanceSuite) testEnvironment(t *testing.T) {
 func (s *ConformanceSuite) testSetupCommands(t *testing.T) {
 	t.Run("ExecutionOrder", func(t *testing.T) {
 		repoPath := s.RepoSetup(t)
-		env := NewTestEnv(t, s.Backend, repoPath)
+		env := NewTestEnv(t, s.Backend, repoPath, s.envConfig())
 
 		err := env.RunSetup(&backend.SetupConfig{
 			SetupCommands: []string{
@@ -343,7 +358,7 @@ func (s *ConformanceSuite) testSetupCommands(t *testing.T) {
 
 	t.Run("WorkingDirectory", func(t *testing.T) {
 		repoPath := s.RepoSetup(t)
-		env := NewTestEnv(t, s.Backend, repoPath)
+		env := NewTestEnv(t, s.Backend, repoPath, s.envConfig())
 
 		err := env.RunSetup(&backend.SetupConfig{
 			SetupCommands: []string{
@@ -362,7 +377,7 @@ func (s *ConformanceSuite) testSetupCommands(t *testing.T) {
 
 	t.Run("EnvVarsAvailable", func(t *testing.T) {
 		repoPath := s.RepoSetup(t)
-		env := NewTestEnv(t, s.Backend, repoPath)
+		env := NewTestEnv(t, s.Backend, repoPath, s.envConfig())
 
 		err := env.RunSetup(&backend.SetupConfig{
 			Environment: map[string]string{
@@ -384,7 +399,7 @@ func (s *ConformanceSuite) testSetupCommands(t *testing.T) {
 
 	t.Run("FailureStopsExecution", func(t *testing.T) {
 		repoPath := s.RepoSetup(t)
-		env := NewTestEnv(t, s.Backend, repoPath)
+		env := NewTestEnv(t, s.Backend, repoPath, s.envConfig())
 
 		err := env.RunSetup(&backend.SetupConfig{
 			SetupCommands: []string{
@@ -406,7 +421,7 @@ func (s *ConformanceSuite) testSetupCommands(t *testing.T) {
 	t.Run("EmptyCommands", func(t *testing.T) {
 		// No setup commands should succeed
 		repoPath := s.RepoSetup(t)
-		env := NewTestEnv(t, s.Backend, repoPath)
+		env := NewTestEnv(t, s.Backend, repoPath, s.envConfig())
 
 		err := env.RunSetup(&backend.SetupConfig{
 			SetupCommands: []string{},
