@@ -1,6 +1,9 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+)
 
 // FlagOverrides contains CLI flag values that override configuration.
 type FlagOverrides struct {
@@ -12,8 +15,9 @@ type FlagOverrides struct {
 
 // Merge combines global config, project config, and CLI flag overrides
 // following the precedence order: backend defaults → global → project → flags.
+// projectDir is used to resolve relative paths in file mounts.
 // Returns the merged configuration ready for use.
-func Merge(global GlobalConfig, project ProjectConfig, flags FlagOverrides) (MergedConfig, error) {
+func Merge(global GlobalConfig, project ProjectConfig, flags FlagOverrides, projectDir string) (MergedConfig, error) {
 	merged := MergedConfig{}
 
 	// Determine which backend to use
@@ -80,9 +84,9 @@ func Merge(global GlobalConfig, project ProjectConfig, flags FlagOverrides) (Mer
 		merged.Env = expandedEnv
 	}
 
-	// Expand file mount source paths
+	// Expand file mount source paths (relative to project directory)
 	if project.Files != nil {
-		expandedFiles, err := ExpandFileMounts(project.Files)
+		expandedFiles, err := ExpandFileMounts(project.Files, projectDir)
 		if err != nil {
 			return MergedConfig{}, fmt.Errorf("failed to expand file mounts: %w", err)
 		}
@@ -105,12 +109,17 @@ func Load(projectDir string, flags FlagOverrides) (MergedConfig, error) {
 		return MergedConfig{}, fmt.Errorf("failed to load project config: %w", err)
 	}
 
-	return Merge(global, project, flags)
+	return Merge(global, project, flags, projectDir)
 }
 
 // LoadFromCwd loads configuration using the current working directory
 // as the project directory.
 func LoadFromCwd(flags FlagOverrides) (MergedConfig, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return MergedConfig{}, fmt.Errorf("failed to get current directory: %w", err)
+	}
+
 	global, err := LoadGlobalConfig()
 	if err != nil {
 		return MergedConfig{}, fmt.Errorf("failed to load global config: %w", err)
@@ -121,5 +130,5 @@ func LoadFromCwd(flags FlagOverrides) (MergedConfig, error) {
 		return MergedConfig{}, fmt.Errorf("failed to load project config: %w", err)
 	}
 
-	return Merge(global, project, flags)
+	return Merge(global, project, flags, cwd)
 }

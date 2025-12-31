@@ -205,7 +205,7 @@ func TestMerge(t *testing.T) {
 		project := DefaultProjectConfig()
 		flags := FlagOverrides{}
 
-		merged, err := Merge(global, project, flags)
+		merged, err := Merge(global, project, flags, "")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -224,7 +224,7 @@ func TestMerge(t *testing.T) {
 		project.Resources.CPUs = 8
 		flags := FlagOverrides{}
 
-		merged, err := Merge(global, project, flags)
+		merged, err := Merge(global, project, flags, "")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -245,7 +245,7 @@ func TestMerge(t *testing.T) {
 			CPUs:   16,
 		}
 
-		merged, err := Merge(global, project, flags)
+		merged, err := Merge(global, project, flags, "")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -262,7 +262,7 @@ func TestMerge(t *testing.T) {
 		project := DefaultProjectConfig()
 		flags := FlagOverrides{Backend: "nonexistent"}
 
-		_, err := Merge(global, project, flags)
+		_, err := Merge(global, project, flags, "")
 		if err == nil {
 			t.Error("expected error for unknown backend")
 		}
