@@ -292,10 +292,10 @@ func (s *ConformanceSuite) testEnvironment(t *testing.T) {
 			t.Fatalf("setup failed: %v", err)
 		}
 
-		// Variable should be set but empty
-		output := env.MustExec("[ -z \"${EMPTY+x}\" ] && echo UNSET || echo SET")
-		if !strings.Contains(output, "SET") {
-			t.Error("empty env var should be set")
+		// Variable should be set but empty - verify via .choir-env file
+		output := env.MustExec("cat .choir-env")
+		if !strings.Contains(output, "export EMPTY=") {
+			t.Error("empty env var should be exported in .choir-env")
 		}
 		env.AssertEnvVar("EMPTY", "")
 	})
