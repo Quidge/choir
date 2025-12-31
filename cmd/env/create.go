@@ -154,7 +154,11 @@ func runCreate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Run setup unless --no-setup is specified
-	if !noSetupFlag && len(createCfg.SetupCommands) > 0 {
+	// Setup handles environment variables, file mounts, and setup commands
+	hasSetupWork := len(createCfg.SetupCommands) > 0 ||
+		len(createCfg.Files) > 0 ||
+		len(createCfg.Environment) > 0
+	if !noSetupFlag && hasSetupWork {
 		runner := be.NewSetupRunner(backendID)
 		setupCfg := &backend.SetupConfig{
 			Environment:   createCfg.Environment,
