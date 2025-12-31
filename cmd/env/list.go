@@ -12,8 +12,9 @@ import (
 )
 
 var listCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List environments",
+	Use:     "list",
+	Aliases: []string{"ls"},
+	Short:   "List environments",
 	Long: `List all environments, optionally filtered by backend or repository.
 
 By default, removed and failed environments are hidden. Use --all to show them.`,

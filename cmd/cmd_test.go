@@ -13,6 +13,7 @@ import (
 	_ "github.com/Quidge/choir/internal/backend/worktree"
 	"github.com/Quidge/choir/internal/config"
 	"github.com/Quidge/choir/internal/state"
+	"github.com/spf13/cobra"
 )
 
 // cleanGitEnv returns a clean environment without git-specific variables
@@ -525,5 +526,44 @@ func TestCobraCommands(t *testing.T) {
 	}
 	if !found {
 		t.Error("command 'env' not found in root command")
+	}
+}
+
+// TestEnvListAlias verifies that "ls" is an alias for "list".
+func TestEnvListAlias(t *testing.T) {
+	// Find the env command
+	var envCmd *cobra.Command
+	for _, cmd := range rootCmd.Commands() {
+		if strings.HasPrefix(cmd.Use, "env") {
+			envCmd = cmd
+			break
+		}
+	}
+	if envCmd == nil {
+		t.Fatal("env command not found")
+	}
+
+	// Find the list subcommand
+	var listCmd *cobra.Command
+	for _, cmd := range envCmd.Commands() {
+		if strings.HasPrefix(cmd.Use, "list") {
+			listCmd = cmd
+			break
+		}
+	}
+	if listCmd == nil {
+		t.Fatal("list command not found")
+	}
+
+	// Verify "ls" is in the aliases
+	found := false
+	for _, alias := range listCmd.Aliases {
+		if alias == "ls" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected 'ls' to be an alias for 'list'")
 	}
 }
