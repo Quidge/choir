@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -125,12 +126,19 @@ func ExpandCredentials(creds CredentialsConfig) (CredentialsConfig, error) {
 }
 
 // ExpandFileMounts expands source paths in file mounts.
-func ExpandFileMounts(files []FileMount) ([]FileMount, error) {
+// Relative source paths are resolved relative to baseDir (the directory
+// containing the project config file).
+func ExpandFileMounts(files []FileMount, baseDir string) ([]FileMount, error) {
 	result := make([]FileMount, len(files))
 	for i, f := range files {
+		// First expand tilde
 		expandedSource, err := ExpandPath(f.Source)
 		if err != nil {
 			return nil, fmt.Errorf("file mount %d source: %w", i, err)
+		}
+		// Then resolve relative paths against baseDir
+		if baseDir != "" && !filepath.IsAbs(expandedSource) {
+			expandedSource = filepath.Clean(filepath.Join(baseDir, expandedSource))
 		}
 		result[i] = FileMount{
 			Source:   expandedSource,
