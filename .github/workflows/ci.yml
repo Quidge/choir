@@ -42,6 +42,9 @@ jobs:
       - name: Run tests
         run: go test -v ./...
 
+      - name: Run conformance tests
+        run: go test -v -tags=conformance,worktree ./internal/backend/conformance
+
   shellcheck:
     runs-on: ubuntu-latest
     steps:
