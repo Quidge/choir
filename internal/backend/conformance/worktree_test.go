@@ -13,6 +13,9 @@ import (
 //
 // Run with: go test -tags=conformance,worktree ./internal/backend/conformance
 func TestWorktreeConformance(t *testing.T) {
+	// Set up XDG_DATA_HOME to a temp directory to avoid polluting user's config
+	SetupXDGDataHome(t)
+
 	be, err := backend.Get(backend.BackendConfig{
 		Name: "conformance-test",
 		Type: "worktree",
