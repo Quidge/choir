@@ -13,6 +13,17 @@ import (
 	"github.com/Quidge/choir/internal/config"
 )
 
+// setupXDGDataHome sets XDG_DATA_HOME to a temp directory for testing.
+// Uses t.TempDir() for automatic cleanup.
+// Returns the XDG_DATA_HOME path.
+func setupXDGDataHome(t *testing.T) string {
+	t.Helper()
+
+	xdgDir := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", xdgDir)
+	return xdgDir
+}
+
 // setupTestRepo creates a temporary git repository for testing.
 // Uses t.TempDir() for automatic cleanup.
 // Returns the repo path.
@@ -87,6 +98,7 @@ func TestBackendType(t *testing.T) {
 }
 
 func TestCreate(t *testing.T) {
+	xdgDir := setupXDGDataHome(t)
 	repoDir := setupTestRepo(t)
 
 	b, _ := New(backend.BackendConfig{})
@@ -119,7 +131,8 @@ func TestCreate(t *testing.T) {
 	}
 
 	// Verify worktree is in correct location (uses short ID - first 12 chars)
-	expectedPath := filepath.Join(filepath.Dir(repoDir), "choir-abc123def456")
+	// Now in XDG_DATA_HOME/choir/worktrees/choir-<id>
+	expectedPath := filepath.Join(xdgDir, "choir", "worktrees", "choir-abc123def456")
 	if backendID != expectedPath {
 		t.Errorf("expected backendID %q, got %q", expectedPath, backendID)
 	}
@@ -162,6 +175,7 @@ func TestCreateMissingRepoPath(t *testing.T) {
 }
 
 func TestCreateDuplicate(t *testing.T) {
+	setupXDGDataHome(t)
 	repoDir := setupTestRepo(t)
 
 	b, _ := New(backend.BackendConfig{})
@@ -192,6 +206,7 @@ func TestCreateDuplicate(t *testing.T) {
 }
 
 func TestStatus(t *testing.T) {
+	setupXDGDataHome(t)
 	repoDir := setupTestRepo(t)
 
 	b, _ := New(backend.BackendConfig{})
@@ -253,6 +268,7 @@ func TestStatusNotChoirManaged(t *testing.T) {
 }
 
 func TestStartStop(t *testing.T) {
+	setupXDGDataHome(t)
 	repoDir := setupTestRepo(t)
 
 	b, _ := New(backend.BackendConfig{})
@@ -304,6 +320,7 @@ func TestStopNotFound(t *testing.T) {
 }
 
 func TestExec(t *testing.T) {
+	setupXDGDataHome(t)
 	repoDir := setupTestRepo(t)
 
 	b, _ := New(backend.BackendConfig{})
@@ -337,6 +354,7 @@ func TestExec(t *testing.T) {
 }
 
 func TestExecWithEnv(t *testing.T) {
+	setupXDGDataHome(t)
 	repoDir := setupTestRepo(t)
 
 	b, _ := New(backend.BackendConfig{})
@@ -391,6 +409,7 @@ func TestExecNotFound(t *testing.T) {
 }
 
 func TestExecFailingCommand(t *testing.T) {
+	setupXDGDataHome(t)
 	repoDir := setupTestRepo(t)
 
 	b, _ := New(backend.BackendConfig{})
@@ -420,6 +439,7 @@ func TestExecFailingCommand(t *testing.T) {
 }
 
 func TestDestroy(t *testing.T) {
+	setupXDGDataHome(t)
 	repoDir := setupTestRepo(t)
 
 	b, _ := New(backend.BackendConfig{})
@@ -455,9 +475,10 @@ func TestDestroy(t *testing.T) {
 }
 
 func TestList(t *testing.T) {
+	setupXDGDataHome(t)
 	repoDir := setupTestRepo(t)
 
-	b := &Backend{repoRoot: repoDir}
+	b, _ := New(backend.BackendConfig{})
 	ctx := context.Background()
 
 	// Create multiple worktrees
@@ -516,6 +537,23 @@ func TestList(t *testing.T) {
 		if !found[resolveOrKeep(id)] {
 			t.Errorf("expected %s to be in list, got: %v", id, list)
 		}
+	}
+}
+
+func TestListEmpty(t *testing.T) {
+	setupXDGDataHome(t)
+
+	b, _ := New(backend.BackendConfig{})
+	ctx := context.Background()
+
+	// List should return empty when no worktrees exist
+	list, err := b.List(ctx)
+	if err != nil {
+		t.Fatalf("List() failed: %v", err)
+	}
+
+	if len(list) != 0 {
+		t.Errorf("expected 0 worktrees, got %d: %v", len(list), list)
 	}
 }
 
@@ -593,6 +631,7 @@ func TestIsChoirManaged(t *testing.T) {
 }
 
 func TestContextCancellation(t *testing.T) {
+	setupXDGDataHome(t)
 	repoDir := setupTestRepo(t)
 
 	b, _ := New(backend.BackendConfig{})

@@ -279,3 +279,13 @@ func generateTestID(t *testing.T) string {
 	}
 	return h
 }
+
+// SetupXDGDataHome sets XDG_DATA_HOME to a temp directory for testing.
+// This prevents tests from polluting the user's real config directory.
+// Uses t.TempDir() for automatic cleanup and returns the path.
+func SetupXDGDataHome(t *testing.T) string {
+	t.Helper()
+	xdgDir := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", xdgDir)
+	return xdgDir
+}

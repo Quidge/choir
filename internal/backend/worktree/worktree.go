@@ -5,11 +5,10 @@
 //   - No process/network isolation (all environments share host environment)
 //   - Fast creation (just git worktree add)
 //   - Shares host credentials (no copying needed)
-//   - Worktrees created at: <repo-parent>/choir-<short-id>/
+//   - Worktrees created at: ~/.local/share/choir/worktrees/choir-<short-id>/
 package worktree
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -103,6 +102,22 @@ const (
 	worktreePrefix = "choir-"
 )
 
+// worktreesBasePath returns the base directory for worktrees.
+// This follows the XDG Base Directory specification:
+// - Uses $XDG_DATA_HOME/choir/worktrees/ if XDG_DATA_HOME is set
+// - Falls back to ~/.local/share/choir/worktrees/
+func worktreesBasePath() (string, error) {
+	dataDir := os.Getenv("XDG_DATA_HOME")
+	if dataDir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("failed to get home directory: %w", err)
+		}
+		dataDir = filepath.Join(home, ".local", "share")
+	}
+	return filepath.Join(dataDir, "choir", "worktrees"), nil
+}
+
 // Backend implements the backend.Backend interface using git worktrees.
 type Backend struct {
 	// repoRoot is the root of the main git repository.
@@ -144,9 +159,18 @@ func (b *Backend) Create(ctx context.Context, cfg *config.CreateConfig) (string,
 		shortID = shortID[:12]
 	}
 
-	// Determine worktree location: <repo-parent>/choir-<short-id>/
-	repoParent := filepath.Dir(repoRoot)
-	worktreePath := filepath.Join(repoParent, worktreePrefix+shortID)
+	// Determine worktree location: ~/.local/share/choir/worktrees/choir-<short-id>/
+	basePath, err := worktreesBasePath()
+	if err != nil {
+		return "", fmt.Errorf("failed to determine worktrees path: %w", err)
+	}
+
+	// Ensure base directory exists
+	if err := os.MkdirAll(basePath, 0755); err != nil {
+		return "", fmt.Errorf("failed to create worktrees directory: %w", err)
+	}
+
+	worktreePath := filepath.Join(basePath, worktreePrefix+shortID)
 
 	// Check if worktree already exists
 	if _, err := os.Stat(worktreePath); err == nil {
@@ -342,47 +366,36 @@ func (b *Backend) Status(ctx context.Context, backendID string) (backend.Backend
 }
 
 // List returns all choir-managed worktrees.
+// It scans the XDG-based worktrees directory for choir-* directories
+// containing the marker file.
 func (b *Backend) List(ctx context.Context) ([]string, error) {
-	// We need a repo root to list worktrees
-	// Try to find it from current directory
-	repoRoot := b.repoRoot
-	if repoRoot == "" {
-		var err error
-		repoRoot, err = findRepoRoot("")
-		if err != nil {
-			return nil, fmt.Errorf("cannot list worktrees: not in a git repository")
-		}
+	basePath, err := worktreesBasePath()
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine worktrees path: %w", err)
 	}
 
-	// Parse git worktree list --porcelain
-	cmd := exec.CommandContext(ctx, "git", "worktree", "list", "--porcelain")
-	cmd.Dir = repoRoot
-	cmd.Env = cleanGitEnv()
-	output, err := cmd.Output()
+	// If the directory doesn't exist, there are no worktrees
+	entries, err := os.ReadDir(basePath)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to list worktrees: %w", err)
+		return nil, fmt.Errorf("failed to read worktrees directory: %w", err)
 	}
 
 	var choirWorktrees []string
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
-	var currentWorktree string
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, "worktree ") {
-			currentWorktree = strings.TrimPrefix(line, "worktree ")
-		} else if line == "" {
-			// End of a worktree entry
-			if currentWorktree != "" && isChoirManaged(currentWorktree) {
-				choirWorktrees = append(choirWorktrees, currentWorktree)
-			}
-			currentWorktree = ""
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
 		}
-	}
+		if !strings.HasPrefix(entry.Name(), worktreePrefix) {
+			continue
+		}
 
-	// Handle last entry if no trailing newline
-	if currentWorktree != "" && isChoirManaged(currentWorktree) {
-		choirWorktrees = append(choirWorktrees, currentWorktree)
+		worktreePath := filepath.Join(basePath, entry.Name())
+		if isChoirManaged(worktreePath) {
+			choirWorktrees = append(choirWorktrees, worktreePath)
+		}
 	}
 
 	return choirWorktrees, nil
