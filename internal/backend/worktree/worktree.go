@@ -404,7 +404,7 @@ func (b *Backend) List(ctx context.Context) ([]string, error) {
 // isChoirManaged checks if a worktree directory is managed by choir.
 // A worktree is choir-managed if:
 // 1. Its directory name starts with "choir-"
-// 2. It contains a .choir-agent marker file
+// 2. It contains a .choir-env-marker file
 func isChoirManaged(worktreePath string) bool {
 	// Check naming convention
 	dirName := filepath.Base(worktreePath)
