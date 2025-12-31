@@ -1,0 +1,44 @@
+version: 2
+
+builds:
+  - main: .
+    binary: choir
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/Quidge/choir/cmd.Version={{.Version}}
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+homebrew_casks:
+  - repository:
+      owner: Quidge
+      name: homebrew-choir
+      token: "{{ .Env.HOMEBREW_TAP_REPO_GH_PAT }}"
+    directory: Casks
+    homepage: "https://github.com/Quidge/choir"
+    description: "Create isolated environments for AI agents to execute autonomously"
+    license: "MIT"
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/choir"]
+          end
+
+release:
+  github:
+    owner: Quidge
+    name: choir
