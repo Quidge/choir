@@ -292,6 +292,26 @@ git push origin env/a1b2c3d4
 gh pr create --base main
 ```
 
+### Per-Environment Git Config
+
+Choir automatically enables Git's `extensions.worktreeConfig` feature (Git 2.20+) when creating environments. This allows you to set git configuration that only applies to a specific environment without affecting the main repository.
+
+Use the `--worktree` flag when setting git config inside an environment:
+
+```bash
+# Inside an environment worktree
+git config --worktree user.name "Agent Name"
+git config --worktree user.email "agent@example.com"
+
+# These settings only apply to this worktree
+# The main repo and other environments are unaffected
+```
+
+This is useful when:
+- Running automated agents that need different commit attribution
+- Testing with different git identities
+- Preventing test configuration from polluting your main repository
+
 ## Configuration
 
 ### Project Configuration
