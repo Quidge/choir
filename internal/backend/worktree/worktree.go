@@ -199,6 +199,15 @@ func (b *Backend) Create(ctx context.Context, cfg *config.CreateConfig) (string,
 		return "", fmt.Errorf("failed to create worktree: %w\noutput: %s", err, output)
 	}
 
+	// Enable worktree-specific config (Git 2.20+)
+	// This allows per-worktree git config using "git config --worktree" so that
+	// config changes in worktrees don't pollute the main repo's .git/config.
+	// This is idempotent - safe to run multiple times.
+	configCmd := exec.CommandContext(ctx, "git", "config", "extensions.worktreeConfig", "true")
+	configCmd.Dir = repoRoot
+	configCmd.Env = cleanGitEnv()
+	_ = configCmd.Run() // Ignore errors - older git versions will refuse but that's ok
+
 	// Create the marker file to identify this as a choir-managed worktree
 	markerPath := filepath.Join(worktreePath, markerFile)
 	markerContent := fmt.Sprintf("id: %s\ncreated_by: choir\n", cfg.ID)

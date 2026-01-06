@@ -651,3 +651,99 @@ func TestContextCancellation(t *testing.T) {
 		t.Log("Create completed despite cancellation (may succeed if fast enough)")
 	}
 }
+
+func TestWorktreeConfigExtensionEnabled(t *testing.T) {
+	setupXDGDataHome(t)
+	repoDir := setupTestRepo(t)
+
+	b, _ := New(backend.BackendConfig{})
+	ctx := context.Background()
+
+	cfg := &config.CreateConfig{
+		ID: "cfge12def456abc123def456abc12345",
+		Repository: config.RepositoryInfo{
+			Path:       repoDir,
+			BaseBranch: "HEAD",
+		},
+	}
+
+	backendID, err := b.Create(ctx, cfg)
+	if err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+	defer b.Destroy(ctx, backendID)
+
+	// Verify extensions.worktreeConfig is enabled on the main repo
+	cmd := exec.Command("git", "config", "--get", "extensions.worktreeConfig")
+	cmd.Dir = repoDir
+	cmd.Env = cleanGitEnv()
+	output, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("failed to get extensions.worktreeConfig: %v", err)
+	}
+
+	if strings.TrimSpace(string(output)) != "true" {
+		t.Errorf("expected extensions.worktreeConfig to be 'true', got %q", strings.TrimSpace(string(output)))
+	}
+}
+
+func TestWorktreeConfigIsolation(t *testing.T) {
+	setupXDGDataHome(t)
+	repoDir := setupTestRepo(t)
+
+	b, _ := New(backend.BackendConfig{})
+	ctx := context.Background()
+
+	cfg := &config.CreateConfig{
+		ID: "isol12def456abc123def456abc12345",
+		Repository: config.RepositoryInfo{
+			Path:       repoDir,
+			BaseBranch: "HEAD",
+		},
+	}
+
+	backendID, err := b.Create(ctx, cfg)
+	if err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+	defer b.Destroy(ctx, backendID)
+
+	// Get original user.name from main repo (or note that it's unset)
+	cmd := exec.Command("git", "config", "--get", "user.name")
+	cmd.Dir = repoDir
+	cmd.Env = cleanGitEnv()
+	originalOutput, _ := cmd.Output()
+	originalName := strings.TrimSpace(string(originalOutput))
+
+	// Set a different user.name in the worktree using --worktree flag
+	worktreeTestName := "Worktree Test User"
+	cmd = exec.Command("git", "config", "--worktree", "user.name", worktreeTestName)
+	cmd.Dir = backendID
+	cmd.Env = cleanGitEnv()
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to set worktree config: %v\n%s", err, out)
+	}
+
+	// Verify the worktree has the new config
+	cmd = exec.Command("git", "config", "--get", "user.name")
+	cmd.Dir = backendID
+	cmd.Env = cleanGitEnv()
+	worktreeOutput, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("failed to get worktree user.name: %v", err)
+	}
+	if strings.TrimSpace(string(worktreeOutput)) != worktreeTestName {
+		t.Errorf("worktree should have user.name %q, got %q", worktreeTestName, strings.TrimSpace(string(worktreeOutput)))
+	}
+
+	// Verify main repo still has original user.name (isolation works)
+	cmd = exec.Command("git", "config", "--get", "user.name")
+	cmd.Dir = repoDir
+	cmd.Env = cleanGitEnv()
+	mainOutput, _ := cmd.Output()
+	mainName := strings.TrimSpace(string(mainOutput))
+
+	if mainName != originalName {
+		t.Errorf("main repo user.name changed from %q to %q - isolation failed!", originalName, mainName)
+	}
+}
