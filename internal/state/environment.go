@@ -55,6 +55,21 @@ var ErrEnvironmentNotFound = errors.New("environment not found")
 // ErrAmbiguousPrefix is returned when an ID prefix matches multiple environments.
 var ErrAmbiguousPrefix = errors.New("ambiguous environment ID prefix")
 
+// AmbiguousPrefixError is returned when an ID prefix matches multiple environments.
+// It includes the list of matching environments for better error messages.
+type AmbiguousPrefixError struct {
+	Prefix  string
+	Matches []*Environment
+}
+
+func (e *AmbiguousPrefixError) Error() string {
+	return fmt.Sprintf("%s: '%s' matches %d environments", ErrAmbiguousPrefix.Error(), e.Prefix, len(e.Matches))
+}
+
+func (e *AmbiguousPrefixError) Unwrap() error {
+	return ErrAmbiguousPrefix
+}
+
 // ErrInvalidPrefix is returned when an ID prefix contains non-hex characters.
 var ErrInvalidPrefix = errors.New("invalid ID prefix: must contain only hexadecimal characters")
 
@@ -151,7 +166,7 @@ func (db *DB) GetEnvironmentByPrefix(prefix string) (*Environment, error) {
 	case 1:
 		return envs[0], nil
 	default:
-		return nil, fmt.Errorf("%w: '%s' matches %d environments", ErrAmbiguousPrefix, prefix, len(envs))
+		return nil, &AmbiguousPrefixError{Prefix: prefix, Matches: envs}
 	}
 }
 

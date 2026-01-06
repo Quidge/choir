@@ -288,7 +288,7 @@ func TestGetByPrefixAmbiguous(t *testing.T) {
 		BranchName: "env/abc123xyz789",
 		BaseBranch: "main",
 		CreatedAt:  time.Now(),
-		Status:     StatusReady,
+		Status:     StatusFailed,
 	}
 
 	if err := db.CreateEnvironment(env1); err != nil {
@@ -302,6 +302,24 @@ func TestGetByPrefixAmbiguous(t *testing.T) {
 	_, err := db.GetEnvironmentByPrefix("abc123")
 	if !errors.Is(err, ErrAmbiguousPrefix) {
 		t.Errorf("GetEnvironmentByPrefix(abc123) error = %v, want ErrAmbiguousPrefix", err)
+	}
+
+	// Verify error contains match details
+	var ambiguousErr *AmbiguousPrefixError
+	if !errors.As(err, &ambiguousErr) {
+		t.Fatalf("expected *AmbiguousPrefixError, got %T", err)
+	}
+	if ambiguousErr.Prefix != "abc123" {
+		t.Errorf("Prefix = %q, want %q", ambiguousErr.Prefix, "abc123")
+	}
+	if len(ambiguousErr.Matches) != 2 {
+		t.Errorf("len(Matches) = %d, want 2", len(ambiguousErr.Matches))
+	}
+
+	// Verify error message format
+	errMsg := ambiguousErr.Error()
+	if errMsg != "ambiguous environment ID prefix: 'abc123' matches 2 environments" {
+		t.Errorf("Error() = %q, want %q", errMsg, "ambiguous environment ID prefix: 'abc123' matches 2 environments")
 	}
 
 	// Should succeed with unique prefix

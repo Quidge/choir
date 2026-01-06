@@ -34,8 +34,9 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		if errors.Is(err, state.ErrEnvironmentNotFound) {
 			return fmt.Errorf("environment %q not found", idPrefix)
 		}
-		if errors.Is(err, state.ErrAmbiguousPrefix) {
-			return fmt.Errorf("ambiguous environment ID %q: matches multiple environments", idPrefix)
+		var ambiguousErr *state.AmbiguousPrefixError
+		if errors.As(err, &ambiguousErr) {
+			return FormatAmbiguousPrefixError(ambiguousErr)
 		}
 		if errors.Is(err, state.ErrInvalidPrefix) {
 			return fmt.Errorf("invalid environment ID %q: must contain only hexadecimal characters", idPrefix)
