@@ -31,12 +31,14 @@ var (
 	baseFlag    string
 	backendFlag string
 	noSetupFlag bool
+	attachFlag  bool
 )
 
 func init() {
 	createCmd.Flags().StringVar(&baseFlag, "base", "", "base branch to create from (default: current branch)")
 	createCmd.Flags().StringVar(&backendFlag, "backend", "", "override default backend")
 	createCmd.Flags().BoolVar(&noSetupFlag, "no-setup", false, "skip setup commands from project config")
+	createCmd.Flags().BoolVar(&attachFlag, "attach", false, "enter the environment shell after creation")
 }
 
 func runCreate(cmd *cobra.Command, args []string) error {
@@ -178,8 +180,14 @@ func runCreate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to update environment status: %w", err)
 	}
 
-	// Print just the short ID for scripting
-	fmt.Println(shortID)
+	if attachFlag {
+		if err := be.Shell(ctx, backendID); err != nil {
+			return fmt.Errorf("shell exited with error: %w", err)
+		}
+	} else {
+		// Print just the short ID for scripting
+		fmt.Println(shortID)
+	}
 
 	return nil
 }
